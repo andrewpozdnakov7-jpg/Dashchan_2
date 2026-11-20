@@ -11,12 +11,17 @@ import chan.http.HttpException;
 import chan.http.HttpHolder;
 import chan.http.MultipartEntity;
 import chan.text.CommentEditor;
+import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.database.PagesDatabase;
+import com.mishiranu.dashchan.content.database.PendingRepliesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.model.PendingReply;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostNumber;
-import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.text.SimilarTextEstimator;
+import com.mishiranu.dashchan.util.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -188,9 +193,36 @@ public class SendPostTask<Key> extends ExecutorTask<long[], Boolean> {
 				}
 			}
 			if (isCancelled()) return false;
+			PagesDatabase.ThreadKey replyKey = null;
+			PostNumber after = null;
+			if (data.threadNumber != null && (Preferences.isShowMyPosts() || Preferences.isTrackMyPostsEnabled())) {
+				try {
+					replyKey = new PagesDatabase.ThreadKey(chan.name, data.boardName, data.threadNumber);
+					after = PagesDatabase.getInstance().getLastKnownPostNumber(replyKey);
+				} catch (RuntimeException e) {
+					replyKey = null;
+					Logger.write(Logger.Type.ERROR, "PendingReply", "baseline_failed", e.getClass().getSimpleName());
+				}
+			}
+			if (isCancelled()) return false;
+			long started = System.currentTimeMillis();
 			ChanPerformer.SendPostResult result = chan.performer.safe().onSendPost(data);
 			serverAccepted = true;
 			this.result = result;
+			if (replyKey != null && (result == null || result.postNumber == null)
+					&& (Preferences.isShowMyPosts() || Preferences.isTrackMyPostsEnabled())) {
+				long accepted = System.currentTimeMillis();
+				try {
+					String text = data.comment;
+					CommentEditor editor = chan.markup.safe().obtainCommentEditor(data.boardName);
+					if (editor != null && text != null) text = editor.removeTags(text);
+					String signature = PendingReply.outgoing(text, data.attachments);
+					PendingRepliesDatabase.remember(replyKey, after, started, accepted, signature);
+				} catch (RuntimeException e) {
+					// The server already accepted this send. Never report a transport failure or resend it.
+					Logger.write(Logger.Type.ERROR, "PendingReply", "receipt_failed", e.getClass().getSimpleName());
+				}
+			}
 			if (journal != null) journal.accepted(data.threadNumber != null ? data.threadNumber
 					: result != null ? result.threadNumber : null, result != null ? result.postNumber : null);
 			if (data.threadNumber == null && (result == null || result.threadNumber == null)) {

@@ -12,9 +12,11 @@ import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
 import com.mishiranu.dashchan.util.FlagUtils;
 import com.mishiranu.dashchan.util.Logger;
+import com.mishiranu.dashchan.util.WeakObservable;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 public class PostsDatabase implements CommonDatabase.Instance {
@@ -45,17 +47,71 @@ public class PostsDatabase implements CommonDatabase.Instance {
 	public static class Flags {
 		public final PostItem.HideState.Map<PostNumber> hiddenPosts;
 		public final HashSet<PostNumber> userPosts;
+		public final long revision;
 
-		public Flags(PostItem.HideState.Map<PostNumber> hiddenPosts, HashSet<PostNumber> userPosts) {
+		public Flags(PostItem.HideState.Map<PostNumber> hiddenPosts, HashSet<PostNumber> userPosts, long revision) {
 			this.hiddenPosts = hiddenPosts;
 			this.userPosts = userPosts;
+			this.revision = revision;
 		}
 	}
 
 	private final CommonDatabase database;
+	private final AtomicLong flagsRevision = new AtomicLong();
+	private final WeakObservable<Consumer<PagesDatabase.ThreadKey>> ownPostObservable = new WeakObservable<>();
 
 	PostsDatabase(CommonDatabase database) {
 		this.database = database;
+	}
+
+	public WeakObservable<Consumer<PagesDatabase.ThreadKey>> getOwnPostObservable() { return ownPostObservable; }
+
+	public long getFlagsRevision() { return flagsRevision.get(); }
+
+	public void readFlagsAsync(PagesDatabase.ThreadKey key, Consumer<Flags> callback) {
+		database.enqueue(database -> {
+			Flags flags = getFlags(key.chanName, key.boardName, key.threadNumber);
+			ConcurrentUtils.HANDLER.post(() -> callback.accept(flags));
+			return null;
+		});
+	}
+
+	public void registerOwnPost(boolean async, PagesDatabase.ThreadKey key, PostNumber postNumber) {
+		CommonDatabase.ExecuteCallback<Void> callback = database -> {
+			writeOwnPost(database, key, postNumber);
+			notifyOwnPostsChanged(key);
+			return null;
+		};
+		if (async) database.enqueue(callback);
+		else database.execute(callback);
+	}
+
+	void notifyOwnPostsChanged(PagesDatabase.ThreadKey key) {
+		flagsRevision.incrementAndGet();
+		ConcurrentUtils.HANDLER.post(() -> {
+			for (Consumer<PagesDatabase.ThreadKey> observer : ownPostObservable) observer.accept(key);
+		});
+	}
+
+	private static void writeOwnPost(SQLiteDatabase db, PagesDatabase.ThreadKey key, PostNumber postNumber) {
+		db.execSQL("INSERT INTO posts (chan_name, board_name, thread_number, "
+				+ "post_number_major, post_number_minor, time, flags) VALUES (?, ?, ?, ?, ?, ?, ?) "
+				+ "ON CONFLICT (chan_name, board_name, thread_number, post_number_major, post_number_minor) "
+				+ "DO UPDATE SET time = excluded.time, flags = posts.flags | excluded.flags",
+				new Object[] {key.chanName, key.boardName, key.threadNumber, postNumber.major, postNumber.minor,
+						System.currentTimeMillis(), Schema.Posts.Flags.USER});
+	}
+
+	/** The caller holds the receipt transaction across the check and write. */
+	static boolean markIfUnowned(SQLiteDatabase db, PagesDatabase.ThreadKey key, PostNumber number) {
+		String[] args = {key.chanName, key.boardName, key.threadNumber,
+				Integer.toString(number.major), Integer.toString(number.minor)};
+		try (Cursor cursor = db.rawQuery("SELECT flags FROM posts WHERE chan_name=? AND board_name=? "
+				+ "AND thread_number=? AND post_number_major=? AND post_number_minor=?", args)) {
+			if (cursor.moveToFirst() && (cursor.getInt(0) & Schema.Posts.Flags.USER) != 0) return false;
+		}
+		writeOwnPost(db, key, number);
+		return true;
 	}
 
 	@Override
@@ -96,6 +152,7 @@ public class PostsDatabase implements CommonDatabase.Instance {
 
 	@Override
 	public void open(SQLiteDatabase database) {
+		PendingRepliesDatabase.open(database);
 		boolean clean;
 		try (Cursor cursor = database.rawQuery("SELECT COUNT(*) FROM " + Schema.Posts.TABLE_NAME, null)) {
 			clean = cursor.moveToFirst() && cursor.getInt(0) > Schema.Posts.MAX_COUNT;
@@ -199,6 +256,7 @@ public class PostsDatabase implements CommonDatabase.Instance {
 						.build();
 				database.delete(Schema.Posts.TABLE_NAME, filter.value, filter.args);
 			}
+			flagsRevision.incrementAndGet();
 			return null;
 		};
 		if (async) {
@@ -215,6 +273,7 @@ public class PostsDatabase implements CommonDatabase.Instance {
 			try {
 				database.beginTransaction();
 				try {
+					database.delete(PendingRepliesDatabase.TABLE, null, null);
 					int userFlag = Schema.Posts.Flags.USER;
 					database.execSQL("UPDATE " + Schema.Posts.TABLE_NAME + " SET " + Schema.Posts.Columns.FLAGS
 							+ " = (" + Schema.Posts.Columns.FLAGS + " & " + ~userFlag + ") WHERE ("
@@ -224,6 +283,7 @@ public class PostsDatabase implements CommonDatabase.Instance {
 				} finally {
 					database.endTransaction();
 				}
+				flagsRevision.incrementAndGet();
 				successful = true;
 			} catch (RuntimeException e) {
 				Logger.write(Logger.Type.ERROR, "PostsDatabase", "clear_user_flags_failed",
@@ -237,6 +297,10 @@ public class PostsDatabase implements CommonDatabase.Instance {
 	}
 
 	public Flags getFlags(@NonNull String chanName, String boardName, @NonNull String threadNumber) {
+		return getFlags(chanName, boardName, threadNumber, true);
+	}
+
+	Flags getFlags(@NonNull String chanName, String boardName, @NonNull String threadNumber, boolean touch) {
 		Objects.requireNonNull(chanName);
 		Objects.requireNonNull(threadNumber);
 		String[] projection = {Schema.Posts.Columns.POST_NUMBER_MAJOR, Schema.Posts.Columns.POST_NUMBER_MINOR,
@@ -249,6 +313,8 @@ public class PostsDatabase implements CommonDatabase.Instance {
 				.build();
 		PostItem.HideState.Map<PostNumber> hiddenPosts = new PostItem.HideState.Map<>();
 		HashSet<PostNumber> userPosts = new HashSet<>();
+		// Read the revision before querying so an in-flight snapshot cannot claim a later write.
+		long revision = flagsRevision.get();
 		try (Cursor cursor = database.query(database -> database
 				.query(Schema.Posts.TABLE_NAME, projection, filter.value, filter.args, null, null, null))) {
 			while (cursor.moveToNext()) {
@@ -264,7 +330,7 @@ public class PostsDatabase implements CommonDatabase.Instance {
 				}
 			}
 		}
-		if (hiddenPosts.size() > 0 || !userPosts.isEmpty()) {
+		if (touch && (hiddenPosts.size() > 0 || !userPosts.isEmpty())) {
 			database.execute(database -> {
 				ContentValues values = new ContentValues();
 				values.put(Schema.Posts.Columns.TIME, System.currentTimeMillis());
@@ -272,6 +338,6 @@ public class PostsDatabase implements CommonDatabase.Instance {
 				return null;
 			});
 		}
-		return new Flags(hiddenPosts, userPosts);
+		return new Flags(hiddenPosts, userPosts, revision);
 	}
 }

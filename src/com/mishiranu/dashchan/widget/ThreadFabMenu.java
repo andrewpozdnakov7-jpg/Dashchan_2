@@ -54,9 +54,13 @@ public final class ThreadFabMenu extends FrameLayout {
 			this.longPressOpensSurface = longPressOpensSurface;
 		}
 	}
+	public static final Action OPEN_MENU = new Action(0, R.string.thread_fab_open_menu, 0, true, true);
+	public static final Action NO_ACTION = new Action(0, R.string.thread_fab_press_none, 0, false, false);
+
 	public interface Host {
 		boolean isAvailable();
-		Action getSingleAction();
+		Action getClickAction();
+		Action getHoldAction();
 		List<Action> getActions();
 		void onAction(int id);
 		void onOpenChanged();
@@ -70,8 +74,8 @@ public final class ThreadFabMenu extends FrameLayout {
 	private final ImageButton fab;
 	private final GradientDrawable fabShape = new GradientDrawable();
 	private final Drawable moreIcon, closeIcon, menuIcon;
-	private Drawable singleIcon;
-	private Action singleAction;
+	private Drawable clickIcon;
+	private Action clickAction, holdAction;
 	private final ScrollView scroller;
 	private final LinearLayout actions;
 	private final int fabSize, fabMargin;
@@ -172,9 +176,11 @@ public final class ThreadFabMenu extends FrameLayout {
 		fab.setAccessibilityDelegate(new AccessibilityDelegate() {
 			@Override public void onInitializeAccessibilityNodeInfo(View view, AccessibilityNodeInfo info) {
 				super.onInitializeAccessibilityNodeInfo(view, info);
-				if (view.isLongClickable() && singleAction != null) {
+				if (view.isLongClickable() && holdAction != null && holdAction.enabled) {
 					info.addAction(new AccessibilityNodeInfo.AccessibilityAction(
-							AccessibilityNodeInfo.ACTION_LONG_CLICK, getContext().getString(singleAction.longPressTitle)));
+							AccessibilityNodeInfo.ACTION_LONG_CLICK, getContext().getString(holdAction.title)));
+				} else {
+					info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK);
 				}
 			}
 		});
@@ -255,7 +261,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
 		boolean visible = !disposed && enabled && active && hasWindowFocus() && host.isAvailable()
 				&& (insets == null || !insets.isVisible(WindowInsetsCompat.Type.ime()));
-		if (!opened) updateSingleAction(visible ? host.getSingleAction() : null);
+		if (!opened) updateButtonActions(visible ? host.getClickAction() : null, visible ? host.getHoldAction() : null);
 		if (available != visible) {
 			available = visible;
 			scrollHidden = false; scrollTravel = 0f;
@@ -270,13 +276,14 @@ public final class ThreadFabMenu extends FrameLayout {
 		if (updateSafeBounds()) requestLayout();
 	}
 
-	private void updateSingleAction(Action action) {
-		if (singleAction == action) return;
-		singleAction = action;
-		singleIcon = action != null ? getContext().getDrawable(action.icon).mutate() : null;
-		fab.setImageDrawable(singleIcon != null ? singleIcon : menuIcon);
-		fab.setEnabled(action == null || action.enabled);
-		fab.setSelected(action != null && action.selected);
+	private void updateButtonActions(Action click, Action hold) {
+		if (clickAction == click && holdAction == hold) return;
+		if (clickAction != click) {
+			clickAction = click;
+			clickIcon = click != null && click != OPEN_MENU ? getContext().getDrawable(click.icon).mutate() : null;
+			updateFabIcon();
+		}
+		holdAction = hold;
 		fab.cancelPendingInputEvents();
 		fab.setPressed(false);
 		updateFabInput();
@@ -284,15 +291,25 @@ public final class ThreadFabMenu extends FrameLayout {
 		updateFabDescription();
 	}
 
+	private void updateFabIcon() {
+		boolean menuVisible = opened || scroller.getVisibility() == VISIBLE;
+		fab.setImageDrawable(!menuVisible && clickIcon != null ? clickIcon : menuIcon);
+		fab.setSelected(!menuVisible && clickIcon != null && clickAction.selected);
+	}
+
 	private void updateFabInput() {
-		fab.setClickable(fabShown);
-		fab.setFocusable(fabShown);
-		fab.setLongClickable(fabShown && singleAction != null && singleAction.enabled && singleAction.longPressId != 0);
+		boolean clickEnabled = opened || (clickAction != null && clickAction.enabled);
+		boolean holdEnabled = !opened && holdAction != null && holdAction.enabled;
+		fab.setEnabled(clickEnabled || holdEnabled);
+		fab.setClickable(fabShown && clickEnabled);
+		// A disabled shortcut still owns its gesture. Releasing it must not run the short-press action.
+		fab.setLongClickable(fabShown && !opened && holdAction != null);
+		fab.setFocusable(fabShown && (clickEnabled || holdEnabled));
 	}
 
 	private void updateFabDescription() {
 		int title = opened ? R.string.thread_fab_close
-				: singleAction != null ? singleAction.title : R.string.thread_fab_actions;
+				: clickAction != null ? clickAction.title : R.string.thread_fab_actions;
 		fab.setContentDescription(getContext().getText(title));
 	}
 
@@ -316,17 +333,14 @@ public final class ThreadFabMenu extends FrameLayout {
 	}
 
 	private boolean activateFab(boolean longPress) {
-		Action shownAction = singleAction;
+		Action shownAction = longPress ? holdAction : clickAction;
 		syncAvailability();
-		if (!available || !fabShown || opened || shownAction != singleAction) return false;
-		if (shownAction != null) {
-			int id = longPress ? shownAction.longPressId : shownAction.id;
-			if (!shownAction.enabled || id == 0) return false;
-			host.onAction(id);
-		} else if (!longPress) {
+		if (!available || !fabShown || opened || shownAction == null || !shownAction.enabled ||
+				shownAction != (longPress ? holdAction : clickAction)) return false;
+		if (shownAction == OPEN_MENU) {
 			open();
 		} else {
-			return false;
+			host.onAction(shownAction.id);
 		}
 		return true;
 	}
@@ -385,6 +399,8 @@ public final class ThreadFabMenu extends FrameLayout {
 		scrollToBottomPending = true;
 		isolateAccessibility();
 		scrim.setVisibility(VISIBLE); scroller.setVisibility(VISIBLE);
+		updateFabIcon();
+		updateFabInput();
 		scroller.setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
 		scroller.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_AUTO);
 		long duration = InterfaceMotion.duration(230);
@@ -439,6 +455,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		long duration = animate ? InterfaceMotion.duration(180) : 0;
 		animateMenu(false, duration);
 		animateShape(false, duration);
+		updateFabInput();
 		updateFabDescription();
 		host.onOpenChanged();
 		if (restoreFocus && available) {
@@ -493,6 +510,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		scroller.setScaleX(.96f); scroller.setScaleY(.96f);
 		scroller.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 		scroller.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+		updateFabIcon();
 		updateFabDescription();
 	}
 	private Drawable actionBackground() {
@@ -505,7 +523,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		int tint = androidx.core.graphics.ColorUtils.blendARGB(colors.onPrimaryContainer, colors.onPrimary, shapeProgress);
 		moreIcon.setTint(tint); closeIcon.setTint(tint);
 		moreIcon.setAlpha(Math.round(255 * (1 - shapeProgress))); closeIcon.setAlpha(Math.round(255 * shapeProgress));
-		if (singleIcon != null) singleIcon.setTint(singleAction.enabled ? tint : colors.disabledContent);
+		if (clickIcon != null) clickIcon.setTint(clickAction.enabled ? tint : colors.disabledContent);
 	}
 	private void animateShape(boolean open, long duration) {
 		if (shapeAnimator != null) { shapeAnimator.cancel(); shapeAnimator = null; }

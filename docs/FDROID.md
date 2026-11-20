@@ -45,9 +45,9 @@ opt-outs remain effective. A locally themed Material launch dialog explains the 
 with up to three explicit confirmations. Settings → Experimental features → New Material 3 interface controls it.
 
 Predictive Back and local app security are available in both distributions through `distribution/features`.
-Predictive Back remains opt-in; ordinary system Back and Material transitions remain available.
-The video converter and Media3 export dependencies are GitHub-only. Firebase/GMS, Google/Gemini and
-application self-update remain excluded from F-Droid. See [the 3.2.85 boundaries](FDROID_3_2_85.md).
+Predictive Back follows the system navigation mode unless the user has chosen a setting.
+Starting with 3.2.91, both distributions include local Media3 video conversion. Automatic compression
+remains opt-in. Firebase/GMS, Google/Gemini and application self-update remain excluded from F-Droid.
 See [the shared presentation contract](../distribution/material3/README.md). Source availability and reference
 publication do not establish that F-Droid has published a new catalogue version.
 

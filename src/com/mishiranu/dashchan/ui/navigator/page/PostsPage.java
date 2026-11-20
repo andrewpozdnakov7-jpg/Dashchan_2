@@ -39,6 +39,7 @@ import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.HidePerformer;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.Preferences.ThreadFabAction;
+import com.mishiranu.dashchan.content.Preferences.ThreadFabPressAction;
 import com.mishiranu.dashchan.content.Preferences.ThreadFabRefreshLongPress;
 import com.mishiranu.dashchan.content.PostsWindowCache;
 import com.mishiranu.dashchan.content.WatcherNotifications;
@@ -48,6 +49,7 @@ import com.mishiranu.dashchan.content.async.ReadPostsWindowTask;
 import com.mishiranu.dashchan.content.async.TaskViewModel;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
+import com.mishiranu.dashchan.content.database.PostsDatabase;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
@@ -100,6 +102,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class PostsPage extends ListPage implements PostsAdapter.Callback, FavoritesStorage.Observer,
 		UiManager.Observer, ExtractPostsTask.Callback, ReadPostsWindowTask.Callback,
@@ -110,6 +113,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		public PagesDatabase.Cache cache;
 		public PagesDatabase.Cache.State cacheState;
 		public long contextEpoch = -1;
+		public long userFlagsRevision = -1;
 		public boolean initialExtract = true;
 		public boolean eraseExtract;
 		public boolean windowedMode;
@@ -307,7 +311,10 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	private Replyable replyable;
 	private List<ThreadFabAction> threadFabActions = Preferences.getEnabledThreadFabActions();
+	private ThreadFabPressAction threadFabClick = Preferences.getThreadFabPressAction(false);
+	private ThreadFabPressAction threadFabHold = Preferences.getThreadFabPressAction(true);
 	private ThreadFabMenu.Action threadFabRefreshAction = createThreadFabRefreshAction();
+	private ThreadFabMenu.Action threadFabRefreshHoldAction = createThreadFabRefreshHoldAction(threadFabRefreshAction);
 	private ReplySwipeController replySwipe;
 	private HidePerformer hidePerformer;
 
@@ -475,6 +482,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		recyclerView.addOnScrollListener(scrollListener);
 		uiManager.observable().register(this);
 		FavoritesStorage.getInstance().getObservable().register(this);
+		CommonDatabase.getInstance().getPosts().getOwnPostObservable().register(ownPostObserver);
 		hidePerformer.setPostsProvider(adapter);
 		initializeImportantPostsMarksFastScrollBarDecoration(recyclerView, retainableExtra);
 
@@ -640,13 +648,20 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	protected void onResume() {
 		// Experimental toolbar preferences can change while this thread remains on the back stack.
 		threadFabActions = Preferences.getEnabledThreadFabActions();
+		threadFabClick = Preferences.getThreadFabPressAction(false);
+		threadFabHold = Preferences.getThreadFabPressAction(true);
 		threadFabRefreshAction = createThreadFabRefreshAction();
+		threadFabRefreshHoldAction = createThreadFabRefreshHoldAction(threadFabRefreshAction);
 		updateOptionsMenu();
 		updateOriginalPostTitle();
 		if (getAdapter().setRemoveHiddenPosts(Preferences.isRemoveHiddenPosts())) {
 			updateImportantPostsFastScrollBarDecorationData();
 		}
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		if (retainableExtra.userFlagsRevision >= 0 &&
+				retainableExtra.userFlagsRevision < CommonDatabase.getInstance().getPosts().getFlagsRevision()) {
+			refreshPostFlags();
+		}
 		if (retainableExtra.dialogsState != null) {
 			retainableExtra.dialogsState.dropState();
 			retainableExtra.dialogsState = null;
@@ -741,12 +756,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		ThreadOpenDiagnostics.Operation applyOperation = ThreadOpenDiagnostics.beginOperation(
 				threadOpenDiagnosticSessionId, "first_window_apply");
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
-		if (result.flags != null) {
-			retainableExtra.hiddenPosts.clear();
-			retainableExtra.hiddenPosts.addAll(result.flags.hiddenPosts);
-			retainableExtra.userPosts.clear();
-			retainableExtra.userPosts.addAll(result.flags.userPosts);
-		}
+		applyPostFlags(retainableExtra, result.flags);
 		Pair<PostNumber, Integer> storedPosition = null;
 		if (result.stateExtra != null) {
 			storedPosition = decodeThreadState(result.stateExtra.state);
@@ -835,6 +845,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 
 	@Override
 	protected void onDestroy() {
+		CommonDatabase.getInstance().getPosts().getOwnPostObservable().unregister(ownPostObserver);
 		if (replySwipe != null) { replySwipe.close(); replySwipe = null; }
 		finishGalleryRefresh(new ErrorItem(ErrorItem.Type.UNKNOWN));
 		stopRefresh();
@@ -944,6 +955,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	}
 
 	private void setPostUserPost(PostItem postItem, boolean userPost) {
+		userFlagEdits++;
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		if (userPost) {
 			retainableExtra.userPosts.add(postItem.getPostNumber());
@@ -963,6 +975,44 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 						postItem.getThreadNumber(), postItem.getPostNumber());
 			}
 		}
+	}
+
+	private long userFlagEdits;
+	private final Consumer<PagesDatabase.ThreadKey> ownPostObserver = key -> {
+		if (isRunning() && key.equals(getPostFlagsThreadKey())) refreshPostFlags();
+	};
+
+	private PagesDatabase.ThreadKey getPostFlagsThreadKey() {
+		Page page = getPage();
+		return new PagesDatabase.ThreadKey(page.chanName, page.boardName, page.threadNumber);
+	}
+
+	private void refreshPostFlags() {
+		long edit = userFlagEdits;
+		CommonDatabase.getInstance().getPosts().readFlagsAsync(getPostFlagsThreadKey(), flags -> {
+			if (!isRunning()) return;
+			if (edit != userFlagEdits) {
+				// The manual change was queued after this read. Pick it up with the next snapshot.
+				refreshPostFlags();
+				return;
+			}
+			RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+			if (flags.revision <= extra.userFlagsRevision) return;
+			boolean changed = PostsExtractController.replaceUserFlags(extra.userPosts, flags, extra.userFlagsRevision);
+			extra.userFlagsRevision = flags.revision;
+			if (changed) {
+				notifyAllAdaptersChanged();
+				updateImportantPostsFastScrollBarDecorationData();
+			}
+		});
+	}
+
+	private static boolean applyPostFlags(RetainableExtra extra, PostsDatabase.Flags flags) {
+		if (!PostsExtractController.replaceFlags(extra.hiddenPosts, extra.userPosts, flags, extra.userFlagsRevision)) {
+			return false;
+		}
+		extra.userFlagsRevision = Math.max(extra.userFlagsRevision, flags.revision);
+		return true;
 	}
 
 	private void setPostHideState(PostItem postItem, PostItem.HideState hideState) {
@@ -1013,6 +1063,13 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		return usesThreadFabMenu() && threadFabActions.contains(action) && isThreadFabActionAvailable(action);
 	}
 
+	private boolean hasReachableThreadFabAction(ThreadFabAction action) {
+		if (!hasThreadFabAction(action)) return false;
+		ThreadFabAction click = getThreadFabClickChoice();
+		return click == null || threadFabHold == ThreadFabPressAction.MENU || click == action
+				|| threadFabHold.action == action;
+	}
+
 	public List<ThreadFabMenu.Action> getThreadFabActions() {
 		ArrayList<ThreadFabMenu.Action> actions = new ArrayList<>(threadFabActions.size());
 		for (ThreadFabAction action : threadFabActions) {
@@ -1021,10 +1078,29 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		return actions;
 	}
 
-	public ThreadFabMenu.Action getSingleThreadFabAction() {
-		if (threadFabActions.size() != 1) return null;
-		ThreadFabAction action = threadFabActions.get(0);
-		return isThreadFabActionAvailable(action) ? getThreadFabAction(action) : null;
+	private ThreadFabAction getThreadFabClickChoice() {
+		ThreadFabAction action = threadFabClick == ThreadFabPressAction.AUTO && threadFabActions.size() == 1
+				? threadFabActions.get(0) : threadFabClick.action;
+		return action != null && threadFabActions.contains(action) && isThreadFabActionAvailable(action) ? action : null;
+	}
+
+	public ThreadFabMenu.Action getThreadFabClickAction() {
+		ThreadFabAction action = getThreadFabClickChoice();
+		return action != null ? getThreadFabAction(action) : ThreadFabMenu.OPEN_MENU;
+	}
+
+	public ThreadFabMenu.Action getThreadFabHoldAction() {
+		if (threadFabHold == ThreadFabPressAction.MENU) return ThreadFabMenu.OPEN_MENU;
+		if (threadFabHold == ThreadFabPressAction.AUTO) {
+			// Keep the previous refresh shortcut for the automatic one-action button.
+			if (threadFabClick == ThreadFabPressAction.AUTO && threadFabActions.size() == 1
+					&& threadFabActions.get(0) == ThreadFabAction.REFRESH && !hasReadTask() && !hasExtractTask()) {
+				return threadFabRefreshHoldAction;
+			}
+			return null;
+		}
+		ThreadFabAction action = threadFabHold.action;
+		return action != null && hasThreadFabAction(action) ? getThreadFabAction(action) : ThreadFabMenu.NO_ACTION;
 	}
 
 	private static final ThreadFabMenu.Action FAB_REPLY = new ThreadFabMenu.Action(
@@ -1044,6 +1120,11 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		ThreadFabRefreshLongPress option = Preferences.getThreadFabRefreshLongPress();
 		return new ThreadFabMenu.Action(R.id.menu_refresh, R.string.thread_fab_refresh, R.drawable.ic_refresh,
 				true, false, false, option.menuId, option.titleResId, option != ThreadFabRefreshLongPress.RELOAD);
+	}
+
+	private static ThreadFabMenu.Action createThreadFabRefreshHoldAction(ThreadFabMenu.Action refresh) {
+		return new ThreadFabMenu.Action(refresh.longPressId, refresh.longPressTitle, 0, true,
+				refresh.longPressOpensSurface);
 	}
 
 	private ThreadFabMenu.Action getThreadFabAction(ThreadFabAction action) {
@@ -1071,7 +1152,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 				getUiManager().navigator().navigatePosting(page.chanName, page.boardName, page.threadNumber);
 			}
 		} else if (id == R.id.menu_refresh || id == R.id.menu_reload) {
-			if (!hasThreadFabAction(ThreadFabAction.REFRESH) || !hasReadTask() && !hasExtractTask()) {
+			if (!hasReachableThreadFabAction(ThreadFabAction.REFRESH) || !hasReadTask() && !hasExtractTask()) {
 				refreshPosts(id == R.id.menu_reload);
 			}
 		} else if (id == R.id.menu_star_text || id == R.id.menu_star_icon) {
@@ -1154,10 +1235,10 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		PostsAdapter adapter = getAdapter();
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 		menu.findItem(R.id.menu_add_post).setVisible(isThreadFabActionAvailable(ThreadFabAction.REPLY)
-				&& !hasThreadFabAction(ThreadFabAction.REPLY));
+				&& !hasReachableThreadFabAction(ThreadFabAction.REPLY));
 		menu.findItem(R.id.menu_search).setVisible(!windowedMode);
 		menu.findItem(R.id.menu_thread_title).setChecked(Preferences.isShowOriginalPostTitle());
-		boolean floatingGallery = hasThreadFabAction(ThreadFabAction.GALLERY);
+		boolean floatingGallery = hasReachableThreadFabAction(ThreadFabAction.GALLERY);
 		boolean galleryButton = Preferences.isThreadGalleryButtonEnabled() && !floatingGallery;
 		menu.findItem(R.id.menu_gallery).setVisible(!windowedMode && !galleryButton && !floatingGallery);
 		menu.findItem(R.id.menu_gallery_toolbar).setVisible(!windowedMode && galleryButton);
@@ -1187,15 +1268,16 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		boolean isFavorite = FavoritesStorage.getInstance().hasFavorite(page.chanName, page.boardName,
 				page.threadNumber);
 		boolean iconFavorite = ResourceUtils.isTabletOrLandscape(getResources().getConfiguration());
-		boolean toolbarFavorite = !hasThreadFabAction(ThreadFabAction.FAVORITE);
+		boolean toolbarFavorite = !hasReachableThreadFabAction(ThreadFabAction.FAVORITE);
 		menu.findItem(R.id.menu_star_text).setVisible(toolbarFavorite && !iconFavorite && !isFavorite);
 		menu.findItem(R.id.menu_unstar_text).setVisible(toolbarFavorite && !iconFavorite && isFavorite);
 		menu.findItem(R.id.menu_star_icon).setVisible(toolbarFavorite && iconFavorite && !isFavorite);
 		menu.findItem(R.id.menu_unstar_icon).setVisible(toolbarFavorite && iconFavorite && isFavorite);
 		menu.findItem(R.id.menu_open_original_thread)
 				.setVisible(Chan.getPreferred(null, retainableExtra.archivedThreadUri).name != null);
-		menu.findItem(R.id.menu_archive).setVisible(canArchiveThread() && !hasThreadFabAction(ThreadFabAction.ARCHIVE));
-		boolean floatingRefresh = hasThreadFabAction(ThreadFabAction.REFRESH);
+		menu.findItem(R.id.menu_archive).setVisible(canArchiveThread()
+				&& !hasReachableThreadFabAction(ThreadFabAction.ARCHIVE));
+		boolean floatingRefresh = hasReachableThreadFabAction(ThreadFabAction.REFRESH);
 		if (floatingRefresh) {
 			menu.findItem(R.id.menu_contents).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
 		}
@@ -2049,8 +2131,7 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 		retainableExtra.contextEpoch = result.contextEpoch;
 		adapter.setContextRevision(result.cache.state, result.contextEpoch);
 		boolean postItemsChanged = !result.postItems.isEmpty() || !result.removedPosts.isEmpty();
-		boolean hiddenRulesChanged = PostsExtractController.replaceFlags(
-				retainableExtra.hiddenPosts, retainableExtra.userPosts, result.flags);
+		boolean hiddenRulesChanged = applyPostFlags(retainableExtra, result.flags);
 		if (result.stateExtra != null) {
 			application.listPositionFromState = transformPairToListPosition(decodeThreadState(result.stateExtra.state));
 			retainableExtra.threadExtra = result.stateExtra.extra;

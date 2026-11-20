@@ -56,13 +56,13 @@ public class SearchImageDialog extends DialogFragment {
 		uri = chan.locator.convert(uri);
 		previewUri = chan.locator.convert(previewUri);
 		DialogMenu dialogMenu = new DialogMenu(new ContextThemeWrapper(context, R.style.Theme_Gallery));
-		for (ImageSearchProvider provider : ImageSearchProvider.getProviders()) {
-			Uri finalUri = uri;
-			Uri finalPreviewUri = previewUri;
-			dialogMenu.add(provider.titleResId, () -> searchImage(provider, finalUri, finalPreviewUri));
-		}
 		Uri finalUri = uri;
 		Uri finalPreviewUri = previewUri;
+		for (ImageSearchProvider provider : ImageSearchProvider.getProviders()) {
+			if (provider.isAvailable(finalUri, finalPreviewUri)) {
+				dialogMenu.add(provider.titleResId, () -> searchImage(provider, finalUri, finalPreviewUri));
+			}
+		}
 		dialogMenu.add(R.string.search_image_with_app,
 				() -> searchImageWithApplication(finalUri, finalPreviewUri));
 		return dialogMenu.create();

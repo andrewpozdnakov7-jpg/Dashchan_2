@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.content.async;
 
 import android.net.Uri;
+import android.os.CancellationSignal;
 import android.util.Log;
 import chan.content.Chan;
 import chan.content.ChanConfiguration;
@@ -19,13 +20,15 @@ import com.mishiranu.dashchan.content.OwnPostRegistration;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
+import com.mishiranu.dashchan.content.database.PendingRepliesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
+import com.mishiranu.dashchan.content.model.PendingReply;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
 import com.mishiranu.dashchan.content.model.Post;
-import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.storage.MyPostsStorage;
+import com.mishiranu.dashchan.util.Logger;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -132,6 +135,55 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 		}
 	}
 
+	private boolean reconcilePendingReplies(PagesDatabase.ThreadKey key, List<Post> readPosts,
+			PostNumber originalPostNumber, boolean includeCache) {
+		if (isCancelled() || (!Preferences.isTrackMyPostsEnabled() && !Preferences.isShowMyPosts())) return false;
+		try {
+			List<PendingReply> receipts = PendingRepliesDatabase.list(key);
+			if (receipts.isEmpty()) return false;
+			List<Post> candidates = includeCache ? mergeCachedPendingReplyCandidates(key, receipts, readPosts) : readPosts;
+			if (candidates == null || candidates.isEmpty() || isCancelled()) return false;
+			if (!Preferences.isTrackMyPostsEnabled() && !Preferences.isShowMyPosts()) return false;
+			PostNumber op = originalPostNumber != null ? originalPostNumber : PostNumber.parseNullable(threadNumber);
+			List<Post> matched = PendingRepliesDatabase.resolve(key, receipts, candidates, op);
+			if (matched.isEmpty() || !Preferences.isTrackMyPostsEnabled()) return false;
+			for (Post post : matched) {
+				MyPostsStorage.getInstance().add(chan.name, boardName, threadNumber, post.number,
+						post.comment, post.timestamp);
+				ReplyPushManager.onPostTracked(MainApplication.getInstance(), chan.name, boardName, threadNumber,
+						post.number);
+			}
+			updateTrackedThread(candidates);
+			return true;
+		} catch (RuntimeException e) {
+			Logger.write(Logger.Type.ERROR, "PendingReply", "resolve_failed", e.getClass().getSimpleName());
+			return false;
+		}
+	}
+
+	private List<Post> mergeCachedPendingReplyCandidates(PagesDatabase.ThreadKey key, List<PendingReply> receipts,
+			List<Post> readPosts) {
+		PagesDatabase pages = PagesDatabase.getInstance();
+		PostNumber cachedThrough = pages.getLastKnownPostNumber(key);
+		if (cachedThrough == null) return readPosts;
+		PostNumber after = PendingReply.cacheAfter(receipts, cachedThrough);
+		if (cachedThrough.equals(after)) return readPosts;
+		TreeMap<PostNumber, Post> candidates = new TreeMap<>();
+		for (Post post : readPosts) candidates.put(post.number, post);
+		CancellationSignal signal = new CancellationSignal();
+		// Reuse the cache reader's per-row and per-page limits. Do not match from an incomplete tail.
+		for (int i = 0; i < 4 && !isCancelled(); i++) {
+			PagesDatabase.ContextPage page = pages.readContextPage(key, after, null, candidates.navigableKeySet(), signal);
+			if (page.skipped() || page.last() == null || page.last().equals(after)) return null;
+			for (Post post : page.posts()) {
+				if (!post.deleted) candidates.put(post.number, post);
+			}
+			if (page.last().compareTo(cachedThrough) >= 0) return new ArrayList<>(candidates.values());
+			after = page.last();
+		}
+		return null;
+	}
+
 	private void markTrackedThreadDeleted() {
 		if (Preferences.isTrackMyPostsEnabled()) {
 			MyPostsStorage storage = MyPostsStorage.getInstance();
@@ -163,6 +215,8 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 		}
 		boolean partial = recovered != null || !loadFullThread && allowPartialThreadLoading
 				&& Preferences.isPartialThreadLoading(chan);
+		boolean resolvePendingReplies = recovered == null && !temporary;
+		PostNumber cachedOriginalPostNumber = originalPostNumber;
 		HttpValidator useValidator = !loadFullThread && meta != null ? meta.validator : null;
 		try {
 			ChanPerformer.ReadPostsResult result;
@@ -223,6 +277,9 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 			}
 			if (posts.isEmpty()) {
 				if (partial) {
+					if (resolvePendingReplies) {
+						reconcilePendingReplies(threadKey, posts, cachedOriginalPostNumber, true);
+					}
 					updateMeta = new UpdateMeta(false, false);
 					return new Result.Success(PagesDatabase.getInstance().getCacheState(threadKey),
 							null, Collections.emptyList(), null);
@@ -245,8 +302,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 						}
 						removedPendingUserPosts.add(pendingUserPost);
 						OwnPostRegistration.register(Preferences.isShowMyPosts(), Preferences.isTrackMyPostsEnabled(), () -> {
-							CommonDatabase.getInstance().getPosts().setFlags(false, chan.name,
-									boardName, threadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
+							CommonDatabase.getInstance().getPosts().registerOwnPost(false, threadKey, postNumber);
 						}, () -> {
 							Post ownPost = null;
 							for (Post post : posts) {
@@ -263,7 +319,12 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 					}
 				}
 			}
-			if (recovered == null) updateTrackedThread(posts);
+			if (recovered == null) {
+				PostNumber op = partial ? cachedOriginalPostNumber : posts.get(0).number;
+				if (!resolvePendingReplies || !reconcilePendingReplies(threadKey, posts, op, partial)) {
+					updateTrackedThread(posts);
+				}
+			}
 
 			PagesDatabase.InsertResult insertResult;
 			boolean newThread = meta == null;
@@ -290,6 +351,9 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 		} catch (HttpException e) {
 			int responseCode = e.getResponseCode();
 			if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
+				if (resolvePendingReplies) {
+					reconcilePendingReplies(threadKey, Collections.emptyList(), cachedOriginalPostNumber, true);
+				}
 				updateMeta = new UpdateMeta(false, false);
 				return new Result.Success(PagesDatabase.getInstance().getCacheState(threadKey),
 						null, Collections.emptyList(), null);

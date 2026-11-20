@@ -29,7 +29,7 @@ Slooop доступен в [GitHub Releases](https://github.com/andrewpozdnakov7
 
 GitHub-версия содержит встроенную проверку обновлений. Офлайн-переводчик Google ML Kit для неё устанавливается по желанию отдельным дополнением размером около 50 МБ и не увеличивает основной APK. Языковой пакет также загружается отдельно. Свободные шрифты и готовые фоновые изображения скачиваются из публичного каталога дополнений только по выбору пользователя.
 
-В F-Droid обновления устанавливаются через каталог, а ответы могут проверяться локально в фоне. В эту сборку не входят встроенное обновление, Firebase, Google Play Services, серверные push-уведомления, Google ML Kit, Gemini Nano и конвертация видео для вложений. Начиная со сборки 3.2.85 доступны офлайн-перевод Mozilla Bergamot со сборкой движка из исходников, защита приложения и Predictive Back. Доступные версии указаны в [каталоге F-Droid](https://f-droid.org/packages/io.dashchan2/).
+В F-Droid обновления устанавливаются через каталог, а ответы могут проверяться локально в фоне. В эту сборку не входят встроенное обновление, Firebase, Google Play Services, серверные push-уведомления, Google ML Kit и Gemini Nano. Со сборки 3.2.85 доступны офлайн-перевод Mozilla Bergamot со сборкой движка из исходников, защита приложения и Predictive Back. Со сборки 3.2.91 доступна локальная конвертация видео для вложений. Доступные версии указаны в [каталоге F-Droid](https://f-droid.org/packages/io.dashchan2/).
 
 ### Возможности
 
@@ -132,7 +132,7 @@ Forum support and the native player libraries are bundled into the main APK. Sep
 
 The GitHub build includes the in-app update checker. Its Google ML Kit offline translator is an optional separate add-on of approximately 50 MB and does not increase the main APK size. Its language pack is downloaded separately as well. Free fonts and ready-made wallpapers are downloaded from the public add-ons catalog only when selected by the user.
 
-F-Droid delivers updates through its repository. Local background reply checks remain available. This build excludes the self-updater, Firebase, Google Play Services, server push notifications, Google ML Kit, Gemini Nano, and video conversion for attachments. F-Droid builds starting with 3.2.85 support offline translation with a source-built Mozilla Bergamot engine, app protection, and Predictive Back. See the [F-Droid listing](https://f-droid.org/packages/io.dashchan2/) for available versions.
+F-Droid delivers updates through its repository. Local background reply checks remain available. This build excludes the self-updater, Firebase, Google Play Services, server push notifications, Google ML Kit, and Gemini Nano. F-Droid builds starting with 3.2.85 support offline translation with a source-built Mozilla Bergamot engine, app protection, and Predictive Back. Local video conversion for attachments is available starting with 3.2.91. See the [F-Droid listing](https://f-droid.org/packages/io.dashchan2/) for available versions.
 
 ### Highlights
 

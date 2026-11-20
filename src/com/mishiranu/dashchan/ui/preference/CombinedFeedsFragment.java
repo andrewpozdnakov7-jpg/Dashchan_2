@@ -1,19 +1,7 @@
 package com.mishiranu.dashchan.ui.preference;
 
-import com.mishiranu.dashchan.widget.MotionDialogBuilder;
-import com.mishiranu.dashchan.widget.InterfaceAppearance;
-import com.mishiranu.dashchan.widget.DialogFormScrollView;
-import android.app.AlertDialog;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.CheckBox;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
 import androidx.annotation.NonNull;
 import chan.content.Chan;
 import chan.content.ChanManager;
@@ -25,20 +13,14 @@ import com.mishiranu.dashchan.content.async.ReadBoardsTask;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.storage.CombinedFeedStorage;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.ConcurrentUtils;
-import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.util.SharedPreferences;
-import com.mishiranu.dashchan.util.ViewUtils;
 import com.mishiranu.dashchan.widget.ClickableToast;
-import com.mishiranu.dashchan.widget.SafePasteEditText;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 public class CombinedFeedsFragment extends PreferenceFragment implements GetBoardsTask.Callback,
 		ReadBoardsTask.Callback, CombinedFeedStorage.Observer {
@@ -170,232 +152,10 @@ public class CombinedFeedsFragment extends PreferenceFragment implements GetBoar
 			ClickableToast.show(R.string.loading__ellipsis);
 			return;
 		}
-		if (Preferences.isDialogFormImeEnabled()) {
-			CombinedFeedDialog.State draft = new CombinedFeedDialog.State(existing, new ArrayList<>(boards), loadingChans.size() > 1);
-			new com.mishiranu.dashchan.ui.InstanceDialog(getChildFragmentManager(), CombinedFeedDialog.class.getName(),
-					provider -> CombinedFeedDialog.create(provider, draft));
-			return;
-		}
-		float density = ResourceUtils.obtainDensity(requireContext());
-		int padding = getResources().getDimensionPixelSize(R.dimen.dialog_padding_view);
-		LinearLayout root = new LinearLayout(requireContext());
-		root.setOrientation(LinearLayout.VERTICAL);
-		root.setPadding(padding, padding, padding, 0);
-		EditText name = new SafePasteEditText(requireContext());
-		name.setSingleLine(true);
-		name.setHint(R.string.combined_feed_name);
-		name.setText(existing != null ? existing.title : "");
-		name.setSelection(name.length());
-		root.addView(name, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-
-		EditText search = new SafePasteEditText(requireContext());
-		search.setSingleLine(true);
-		search.setHint(R.string.combined_feed_search_boards);
-		root.addView(search, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-		CheckBox showSticky = new CheckBox(requireContext());
-		showSticky.setText(R.string.show_sticky_threads);
-		showSticky.setChecked(existing == null || existing.showSticky);
-		root.addView(showSticky, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-		CheckBox showBoard = new CheckBox(requireContext());
-		showBoard.setText(R.string.combined_feed_show_board);
-		showBoard.setChecked(existing == null || existing.showBoard);
-		root.addView(showBoard, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-		InterfaceAppearance.standardCustomInsets(root);
-		InterfaceAppearance.standardCustomContent(name);
-		InterfaceAppearance.standardCustomContent(search);
-		InterfaceAppearance.standardFormChoice(showSticky);
-		InterfaceAppearance.standardFormChoice(showBoard);
-
-		HashSet<String> selected = new HashSet<>();
-		if (existing != null) {
-			for (CombinedFeedStorage.Source source : existing.sources) {
-				selected.add(makeSourceKey(source.chanName, source.boardName));
-			}
-		}
-		ArrayList<Board> dialogBoards = new ArrayList<>(boards);
-		HashSet<String> availableKeys = new HashSet<>();
-		for (Board board : boards) {
-			availableKeys.add(board.getKey());
-		}
-		if (existing != null) {
-			for (CombinedFeedStorage.Source source : existing.sources) {
-				String key = makeSourceKey(source.chanName, source.boardName);
-				if (!availableKeys.contains(key)) {
-					dialogBoards.add(new Board(source.chanName, getChanTitle(source.chanName), source.boardName,
-							formatSourceLabel(source.chanName, source.boardName), true));
-				}
-			}
-		}
-
-		LinkedHashMap<String, ArrayList<Board>> groupedBoards = new LinkedHashMap<>();
-		for (Board board : dialogBoards) {
-			String group = board.unavailable ? UNAVAILABLE_GROUP : board.chanName;
-			ArrayList<Board> groupBoards = groupedBoards.get(group);
-			if (groupBoards == null) {
-				groupBoards = new ArrayList<>();
-				groupedBoards.put(group, groupBoards);
-			}
-			groupBoards.add(board);
-		}
-		boolean grouped = loadingChans.size() > 1 || groupedBoards.containsKey(UNAVAILABLE_GROUP);
-		HashSet<String> expandedGroups = new HashSet<>();
-		if (grouped) {
-			for (Board board : dialogBoards) {
-				if (selected.contains(board.getKey())) {
-					expandedGroups.add(board.unavailable ? UNAVAILABLE_GROUP : board.chanName);
-				}
-			}
-			if (expandedGroups.isEmpty() && !groupedBoards.isEmpty()) {
-				expandedGroups.add(groupedBoards.keySet().iterator().next());
-			}
-		}
-
-		LinearLayout checks = new LinearLayout(requireContext());
-		checks.setOrientation(LinearLayout.VERTICAL);
-		Runnable[] rebuild = new Runnable[1];
-		rebuild[0] = () -> {
-			checks.removeAllViews();
-			String query = search.getText().toString().trim().toLowerCase(Locale.ROOT);
-			boolean searching = !query.isEmpty();
-			int visibleBoards = 0;
-			for (Map.Entry<String, ArrayList<Board>> entry : groupedBoards.entrySet()) {
-				ArrayList<Board> matches = new ArrayList<>();
-				for (Board board : entry.getValue()) {
-					String haystack = (board.chanTitle + ' ' + board.chanName + ' ' + board.name + ' '
-							+ board.title).toLowerCase(Locale.ROOT);
-					if (!searching || haystack.contains(query)) {
-						matches.add(board);
-					}
-				}
-				if (matches.isEmpty()) {
-					continue;
-				}
-				visibleBoards += matches.size();
-				boolean expanded = !grouped || searching || expandedGroups.contains(entry.getKey());
-				if (grouped) {
-					String groupTitle = UNAVAILABLE_GROUP.equals(entry.getKey())
-							? getString(R.string.combined_feed_unavailable_boards) : matches.get(0).chanTitle;
-					TextView header = new TextView(requireContext(), null, android.R.attr.textAppearanceListItem);
-					header.setText((expanded ? "\u25bc " : "\u25b6 ") + groupTitle);
-					header.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
-					ViewUtils.setSelectableItemBackground(header);
-					header.setOnClickListener(v -> {
-						if (expandedGroups.contains(entry.getKey())) {
-							expandedGroups.remove(entry.getKey());
-						} else {
-							expandedGroups.add(entry.getKey());
-						}
-						rebuild[0].run();
-					});
-					checks.addView(header, ViewGroup.LayoutParams.MATCH_PARENT, (int) (48f * density));
-					InterfaceAppearance.standardFormHeading(header);
-				}
-				if (expanded) {
-					for (Board board : matches) {
-						CheckBox checkBox = new CheckBox(requireContext());
-						checkBox.setText(board.title);
-						checkBox.setChecked(selected.contains(board.getKey()));
-						checkBox.setOnCheckedChangeListener((button, checked) -> {
-							if (checked) {
-								selected.add(board.getKey());
-							} else {
-								selected.remove(board.getKey());
-							}
-						});
-						checks.addView(checkBox, ViewGroup.LayoutParams.MATCH_PARENT,
-								ViewGroup.LayoutParams.WRAP_CONTENT);
-						InterfaceAppearance.standardFormChoice(checkBox);
-					}
-				}
-			}
-			if (visibleBoards == 0) {
-				TextView empty = new TextView(requireContext(), null, android.R.attr.textAppearanceListItem);
-				empty.setText(R.string.combined_feed_no_matching_boards);
-				empty.setPadding((int) (8f * density), 0, (int) (8f * density), 0);
-				checks.addView(empty, ViewGroup.LayoutParams.MATCH_PARENT, (int) (48f * density));
-				InterfaceAppearance.standardFormHeading(empty);
-				InterfaceAppearance.standardCustomCaption(empty);
-			}
-		};
-		search.addTextChangedListener(new TextWatcher() {
-			@Override
-			public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-			@Override
-			public void onTextChanged(CharSequence s, int start, int before, int count) {
-				rebuild[0].run();
-			}
-
-			@Override
-			public void afterTextChanged(Editable s) {}
-		});
-		rebuild[0].run();
-		View dialogContent;
-		if (InterfaceAppearance.isEnabled(requireContext())) {
-			// One scrolling owner for all fields and results. Short/empty bodies wrap;
-			// large bodies are bounded by the available dialog/IME height and 320dp.
-			root.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			DialogFormScrollView form = new DialogFormScrollView(requireContext());
-			form.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			dialogContent = form;
-		} else {
-			ScrollView scrollView = new ScrollView(requireContext());
-			scrollView.addView(checks, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			root.addView(scrollView, ViewGroup.LayoutParams.MATCH_PARENT, (int) (320f * density));
-			dialogContent = root;
-		}
-
-		AlertDialog.Builder builder = MotionDialogBuilder.standard(requireContext())
-				.setTitle(existing != null ? R.string.edit_combined_feed : R.string.add_combined_feed)
-				.setView(dialogContent)
-				.setNegativeButton(android.R.string.cancel, null)
-				.setPositiveButton(android.R.string.ok, null);
-		if (existing != null) {
-			builder.setNeutralButton(R.string.delete, null);
-		}
-		AlertDialog dialog = builder.create();
-		InterfaceAppearance.standardCustomDialogContent(dialog, dialogContent);
-		if (InterfaceAppearance.isEnabled(requireContext())) dialog.getWindow().setSoftInputMode(
-				android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-		dialog.setOnShowListener(ignored -> {
-			dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
-				String title = name.getText().toString().trim();
-				if (StringUtils.isEmptyOrWhitespace(title)) {
-					ClickableToast.show(R.string.combined_feed_name_required);
-					return;
-				}
-				if (selected.size() < 2) {
-					ClickableToast.show(R.string.combined_feed_minimum_boards);
-					return;
-				}
-				CombinedFeedStorage.Feed feed = new CombinedFeedStorage.Feed();
-				feed.id = existing != null ? existing.id : null;
-				feed.title = title;
-				feed.showSticky = showSticky.isChecked();
-				feed.showBoard = showBoard.isChecked();
-				for (Board board : dialogBoards) {
-					if (selected.contains(board.getKey())) {
-						feed.sources.add(new CombinedFeedStorage.Source(board.chanName, board.name));
-					}
-				}
-				if (CombinedFeedStorage.getInstance().put(feed)) {
-					dialog.dismiss();
-				} else {
-					ClickableToast.show(R.string.combined_feeds_limit);
-				}
-			});
-			if (existing != null) {
-				dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(button ->
-						MotionDialogBuilder.standard(requireContext())
-								.setMessage(R.string.delete_combined_feed_confirmation)
-								.setNegativeButton(android.R.string.cancel, null)
-								.setPositiveButton(R.string.delete, (confirmation, which) -> {
-									CombinedFeedStorage.getInstance().remove(existing.id);
-									dialog.dismiss();
-								}).show());
-			}
-		});
-		dialog.show();
+		CombinedFeedDialog.State draft = new CombinedFeedDialog.State(existing, new ArrayList<>(boards),
+				loadingChans.size() > 1);
+		new InstanceDialog(getChildFragmentManager(), CombinedFeedDialog.class.getName(),
+				provider -> CombinedFeedDialog.create(provider, draft));
 	}
 
 	private void loadNextChan() {

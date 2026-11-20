@@ -7,7 +7,7 @@ import org.junit.Test;
 
 /** Mozilla and Material 3 are shared; proprietary bridges remain excluded; local security and predictive Back are shared. */
 public class TranslationDistributionTest {
-    @Test public void sharedFeaturesAreAvailableWithoutGoogleOrVideoExport() {
+    @Test public void sharedFeaturesAreAvailableWithoutGoogleTranslation() {
         assertTrue(BuildConfig.ENABLE_LOCAL_TRANSLATION);
         assertTrue(TranslationEngine.MOZILLA.isAvailable());
         assertFalse(Preferences.DEFAULT_LOCAL_TRANSLATION);
@@ -20,7 +20,7 @@ public class TranslationDistributionTest {
         assertTrue(Preferences.DEFAULT_NEW_POSTING_FORM);
         assertTrue(Preferences.DEFAULT_NEW_VIDEO_PLAYER);
         assertTrue(BuildConfig.ENABLE_PREDICTIVE_BACK);
-        assertFalse(BuildConfig.ENABLE_VIDEO_COMPRESSION);
+        assertTrue(BuildConfig.ENABLE_VIDEO_COMPRESSION);
         assertTrue(BuildConfig.ENABLE_APP_SECURITY_SETTINGS);
     }
 }

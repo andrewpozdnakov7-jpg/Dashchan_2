@@ -23,6 +23,7 @@ filesystem paths, workstation identifiers, signing data, credentials, or private
 | Dependency | Scope in the F-Droid APK | License |
 | --- | --- | --- |
 | AndroidX Activity, Core, Fragment, RecyclerView, DrawerLayout, WebKit, Browser, WorkManager | Runtime | Apache-2.0 |
+| AndroidX Media3 Transformer and Effect 1.11.1 | Local video conversion | Apache-2.0 |
 | Jackson Core 2.22.3 | Runtime | Apache-2.0 |
 | Google Brotli Java decoder v1.2.0 (vendored source) | Runtime | MIT |
 | jsoup 1.23.2 | Runtime | MIT |

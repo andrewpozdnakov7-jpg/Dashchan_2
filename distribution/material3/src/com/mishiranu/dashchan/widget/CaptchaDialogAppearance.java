@@ -22,6 +22,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.view.WindowMetrics;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -61,13 +63,23 @@ public final class CaptchaDialogAppearance {
 	private final Context context;
 	private final LinearLayout content;
 	private final int surface, text, accent, secondary;
-	private final LinearLayout selectedRow;
+	private final LinearLayout header, selectedRow;
+	private final HorizontalScrollView selectedScroll;
+	private ImageView taskView;
+	private LinearLayout root, footerView;
+	private View hostDecor;
+	private Window pickerWindow;
+	private final View.OnLayoutChangeListener resizePicker = (v, l, t, r, b, ol, ot, or, ob) -> {
+		if (pickerWindow != null && (r - l != or - ol || b - t != ob - ot)) {
+			sizeWindow(pickerWindow);
+			root.requestLayout();
+		}
+	};
 	private final TextView error;
 	private final FrameLayout processingSlot, refreshSlot;
 	private final LoadingIndicator selectionLoading, refreshLoading;
 	private final ImageView refreshIcon;
 	private final Button refresh, cancel, done;
-	private LinearLayout root;
 	private Bitmap[] selected = new Bitmap[0];
 	private boolean closed, started;
 	private Runnable delayedSelection;
@@ -91,7 +103,7 @@ public final class CaptchaDialogAppearance {
 		accent = InterfaceAppearance.contrasting(theme.accent, surface, 3);
 		secondary = InterfaceAppearance.contrasting(ColorUtils.blendARGB(surface, text, .65f), surface, 4.5);
 		content.setPadding(0, 0, 0, 0);
-		LinearLayout header = new LinearLayout(context); header.setGravity(Gravity.CENTER_VERTICAL);
+		header = new LinearLayout(context); header.setGravity(Gravity.CENTER_VERTICAL);
 		TextView title = label(instruction, 16, text);
 		ChoiceDialogInstruction.allowFullText(title);
 		header.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -104,7 +116,7 @@ public final class CaptchaDialogAppearance {
 		selectedRow = new LinearLayout(context); selectedRow.setGravity(Gravity.CENTER_VERTICAL);
 		selectedRow.setContentDescription(context.getString(R.string.captcha_dialog_selected));
 		selectedRow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-		HorizontalScrollView selectedScroll = new SelectionScroll();
+		selectedScroll = new SelectionScroll();
 		selectedScroll.setHorizontalScrollBarEnabled(false); selectedScroll.setFillViewport(true);
 		selectedScroll.addView(selectedRow, new FrameLayout.LayoutParams(-2, -1));
 		LinearLayout.LayoutParams panelParams = new LinearLayout.LayoutParams(-1, dp(64)); panelParams.bottomMargin = dp(12);
@@ -219,7 +231,7 @@ public final class CaptchaDialogAppearance {
 	}
 	public ImageView taskImage(Bitmap image) {
 		ImageView view = new ImageView(context); view.setAdjustViewBounds(true); view.setScaleType(ImageView.ScaleType.FIT_CENTER);
-		view.setImageBitmap(image); content.addView(view, new LinearLayout.LayoutParams(-1, dp(120))); return view;
+		view.setImageBitmap(image); content.addView(view, new LinearLayout.LayoutParams(-1, dp(120))); taskView = view; return view;
 	}
 	public void finishImageChanges() { imageMotion.finish(); }
 	public void bindImage(ImageView view, Bitmap image) {
@@ -264,25 +276,56 @@ public final class CaptchaDialogAppearance {
 		android.graphics.Insets safe = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
 		return Math.max(1, height - safe.top - safe.bottom - outerSpacing);
 	}
-	private void hideEditorKeyboard() {
+	private Activity hostActivity() {
 		Context owner = context;
 		while (owner instanceof ContextWrapper && !(owner instanceof Activity)) {
 			Context base = ((ContextWrapper) owner).getBaseContext();
 			if (base == owner) break;
 			owner = base;
 		}
-		if (owner instanceof Activity) {
-			android.view.WindowInsetsController controller = ((Activity) owner).getWindow().getInsetsController();
+		return owner instanceof Activity ? (Activity) owner : null;
+	}
+	private void hideEditorKeyboard() {
+		Activity owner = hostActivity();
+		if (owner != null) {
+			android.view.WindowInsetsController controller = owner.getWindow().getInsetsController();
 			if (controller != null) controller.hide(WindowInsets.Type.ime());
 		}
+	}
+	public View choiceBody(LinearLayout keys) {
+		return new CaptchaChoiceLayout(context, content, header, selectedScroll, taskView, keys);
+	}
+	private WindowMetrics windowMetrics() {
+		return context.getSystemService(WindowManager.class).getCurrentWindowMetrics();
+	}
+	private boolean useWide(WindowMetrics m) {
+		android.graphics.Insets safe = m.getWindowInsets().getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+		return CaptchaChoiceLayout.wide(m.getBounds().width() - safe.left - safe.right,
+				m.getBounds().height() - safe.top - safe.bottom, dp(560));
+	}
+	private void sizeWindow(Window window) {
+		WindowMetrics m = windowMetrics();
+		android.graphics.Insets safe = m.getWindowInsets().getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+		boolean wide = root != null && root.getChildAt(0) instanceof CaptchaChoiceLayout && useWide(m);
+		int w = Math.min(dp(wide ? 720 : 560), Math.max(1, m.getBounds().width() - safe.left - safe.right - dp(wide ? 24 : 48)));
+		if (window.getAttributes().width != w) window.setLayout(w, ViewGroup.LayoutParams.WRAP_CONTENT);
 	}
 	public AlertDialog create(View scroll, DialogInterface.OnClickListener actions, Runnable dismiss) {
 		root = new LinearLayout(context) {
 			@Override protected void onMeasure(int widthSpec, int heightSpec) {
-				android.view.WindowMetrics metrics = ((android.view.WindowManager) context.getSystemService(Context.WINDOW_SERVICE)).getCurrentWindowMetrics();
-				int limit = contentHeightLimit(metrics.getBounds().height(), metrics.getWindowInsets(), dp(48));
+				WindowMetrics metrics = windowMetrics();
+				boolean wide = scroll instanceof CaptchaChoiceLayout && useWide(metrics)
+						&& MeasureSpec.getSize(widthSpec) >= dp(504);
+				if (scroll instanceof CaptchaChoiceLayout) ((CaptchaChoiceLayout) scroll).split(wide);
+				int hPad = dp(wide ? 16 : 24), top = dp(wide ? 12 : 24), bottom = dp(wide ? 8 : 16);
+				if (getPaddingLeft() != hPad || getPaddingTop() != top || getPaddingBottom() != bottom)
+					setPadding(hPad, top, hPad, bottom);
+				((LinearLayout.LayoutParams) scroll.getLayoutParams()).height = wide ? 0 : ViewGroup.LayoutParams.WRAP_CONTENT;
+				((LinearLayout.LayoutParams) footerView.getLayoutParams()).topMargin = dp(wide ? 8 : 16);
+				int limit = contentHeightLimit(metrics.getBounds().height(), metrics.getWindowInsets(), dp(wide ? 16 : 48));
+				if (wide) limit = Math.min(limit, dp(380));
 				int size = MeasureSpec.getMode(heightSpec) == MeasureSpec.UNSPECIFIED ? limit : Math.min(MeasureSpec.getSize(heightSpec), limit);
-				super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(size, MeasureSpec.AT_MOST));
+				super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(size, wide ? MeasureSpec.EXACTLY : MeasureSpec.AT_MOST));
 			}
 		};
 		root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(24), dp(24), dp(24), dp(16));
@@ -298,7 +341,7 @@ public final class CaptchaDialogAppearance {
 				setOrientation(dp(48 + 8) + cancel.getMeasuredWidth() + done.getMeasuredWidth() > available ? VERTICAL : HORIZONTAL);
 				super.onMeasure(widthSpec, heightSpec);
 			}
-		}; footer.setGravity(Gravity.CENTER_VERTICAL);
+		}; footerView = footer; footer.setGravity(Gravity.CENTER_VERTICAL);
 		LinearLayout.LayoutParams footerParams = new LinearLayout.LayoutParams(-1, -2); footerParams.topMargin = dp(16);
 		root.addView(footer, footerParams);
 		footer.addView(refreshSlot, new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -324,9 +367,12 @@ public final class CaptchaDialogAppearance {
 		Window window = dialog.getWindow();
 		if (window != null) {
 			window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT)); window.getDecorView().setPadding(0, 0, 0, 0);
-			android.view.WindowMetrics metrics = window.getWindowManager().getCurrentWindowMetrics();
-			android.graphics.Insets insets = metrics.getWindowInsets().getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-			window.setLayout(Math.min(dp(560), Math.max(1, metrics.getBounds().width() - insets.left - insets.right - dp(48))), -2);
+			pickerWindow = window;
+			sizeWindow(window);
+			Activity host = hostActivity();
+			if (hostDecor == null && host != null) {
+				hostDecor = host.getWindow().getDecorView(); hostDecor.addOnLayoutChangeListener(resizePicker);
+			}
 			window.setDimAmount(.32f);
 			window.setWindowAnimations(InterfaceMotion.duration(1) > 0 ? R.style.Motion_Captcha_Dialog : 0);
 			// This symbol picker has no text editor. Safe bounds already use WindowInsets
@@ -368,6 +414,8 @@ public final class CaptchaDialogAppearance {
 	}
 	public void close() {
 		if (closed) return; closed = true;
+		if (hostDecor != null) hostDecor.removeOnLayoutChangeListener(resizePicker);
+		hostDecor = null; pickerWindow = null;
 		if (delayedSelection != null) HANDLER.removeCallbacks(delayedSelection);
 		selectionLoading.setVisibility(View.INVISIBLE); refreshLoading.setVisibility(View.INVISIBLE);
 		refreshLoading.animate().cancel(); refreshIcon.animate().cancel();

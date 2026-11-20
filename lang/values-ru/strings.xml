@@ -880,6 +880,7 @@
 	<string name="search_image_google_lens">Google Lens</string>
 	<string name="search_image_with_app">Открыть с помощью приложения</string>
 	<string name="search_image_yandex">Яндекс</string>
+	<string name="search_image_tineye">TinEye</string>
 	<string name="uploading_image__ellipsis">Загрузка изображения…</string>
 	<string name="secure_connection">Защищённое соединение</string>
 	<string name="secure_connection__summary">Использовать протокол HTTPS</string>
@@ -1082,6 +1083,8 @@
 	<string name="reorder_attachment">Изменить порядок вложений</string>
 	<string name="preview_video_attachment">Предпросмотр видео</string>
 	<string name="preference_captcha_full_keyboard">Использовать полную клавиатуру для капчи</string>
+	<string name="preference_show_post_voting">Показывать голосования</string>
+	<string name="preference_show_post_voting_summary">Кнопки и счётчики лайков и дизлайков под постами.</string>
 	<string name="preference_monkey_button">Кнопка Манки в редакторе</string>
 	<string name="preference_monkey_button_summary">Показывать кнопку Манки в редакторе новых постов и ответов. Доступно пользователям, оставившим не менее 10 постов на Дваче.</string>
 	<string name="preference_artmonkey_button">Кнопка Артманки в редакторе</string>
@@ -1567,12 +1570,15 @@
 	<string name="thread_fab_order_summary">Снизу вверх, начиная от плавающей кнопки</string>
 	<string name="thread_fab_actions">Действия треда</string>
 	<string name="thread_fab_close">Закрыть действия треда</string>
+	<string name="thread_fab_click">Короткое нажатие</string>
+	<string name="thread_fab_hold">Долгое нажатие</string>
+	<string name="thread_fab_press_auto">Автоматически</string>
+	<string name="thread_fab_open_menu">Открыть меню</string>
+	<string name="thread_fab_press_none">Ничего</string>
 	<string name="thread_fab_refresh">Обновить тред</string>
 	<string name="thread_fab_refresh_long_press">Долгое нажатие на «Обновить»</string>
 	<string name="thread_fab_nothing_to_clear">В кэше нет сообщений для очистки</string>
 	<string name="old_posts_will_be_deleted__sentence">Старые сообщения будут удалены из локального кэша безвозвратно.</string>
 	<string name="thread_fab_save">Сохранить тред</string>
 	<string name="thread_fab_reload">Перезагрузить весь тред</string>
-	<string name="dialog_form_ime">Новая обработка клавиатуры в диалогах</string>
-	<string name="dialog_form_ime_summary">Улучшает размещение и прокрутку редактора ленты и фильтра истории, сохраняет черновик ленты при повороте. По умолчанию включена.</string>
 </resources>

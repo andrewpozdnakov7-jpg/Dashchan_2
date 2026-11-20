@@ -191,7 +191,7 @@ public final class InterfaceAppearance {
 	}
 	/** Opt-in for the two IME-aware scrolling forms, not a policy for all standard dialogs. */
 	public static void standardFormDialog(AlertDialog dialog) {
-		if (Preferences.isDialogFormImeEnabled()) StandardAppearance.formDialog(dialog);
+		StandardAppearance.formDialog(dialog);
 	}
 	public static void standardChoiceText(TextView view) { role(view, Role.CUSTOM_CHOICE_TEXT); }
 	public static void standardCustomAction(Button view, boolean primary) { role(view, primary ? Role.CUSTOM_ACTION : Role.CUSTOM_TEXT_ACTION); }

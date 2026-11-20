@@ -11,7 +11,6 @@ public final class DialogFormInsets {
 
 	/** Call after MotionDialogBuilder.create() and before show(); preserves the IME state policy. */
 	public static void configure(AlertDialog dialog) {
-		if (!com.mishiranu.dashchan.content.Preferences.isDialogFormImeEnabled()) return;
 		Window window = dialog.getWindow();
 		if (window == null) return;
 

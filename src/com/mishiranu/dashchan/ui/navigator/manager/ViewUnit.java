@@ -34,6 +34,7 @@ import chan.content.Chan;
 import chan.content.ChanConfiguration;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.dvach.DvachChanConfiguration;
 import com.mishiranu.dashchan.content.ImageLoader;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.content.WallpaperManager;
@@ -596,7 +597,8 @@ public class ViewUnit {
 				makeHighlightedText(demandSet.highlightText, comment));
 		holder.comment.setVisibility(subject.length() > 0 || comment.length() > 0 ? View.VISIBLE : View.GONE);
 		holder.comment.bindSelectionPaddingView(demandSet.lastInList ? holder.textSelectionPadding : null);
-		if (postItem.isShowVotes()) {
+		if (postItem.isShowVotes()
+				&& (!(chan.configuration instanceof DvachChanConfiguration dvach) || dvach.isPostVotingShown())) {
 			holder.voteLike.setText(Integer.toString(postItem.getLikes()));
 			holder.voteDislike.setText(Integer.toString(postItem.getDislikes()));
 			holder.voteLike.setContentDescription(holder.itemView.getContext().getString(R.string.vote_like)

@@ -353,8 +353,8 @@ android {
 
 	defaultConfig {
 		applicationId = 'io.dashchan2'
-		versionCode = 11700
-		versionName = '3.2.90'
+		versionCode = 11710
+		versionName = '3.2.91'
 		def releaseVersionCode = versionCode
 		def packageVersionCodeProperty = project.findProperty('packageVersionCode')
 		if (packageVersionCodeProperty != null) {
@@ -447,7 +447,7 @@ android {
 			buildConfigField 'String', 'UPDATE_GITHUB_BETA_LATEST_RELEASE_URL', '""'
 		}
 		fdroid {
-			buildConfigField 'boolean', 'ENABLE_VIDEO_COMPRESSION', 'false'
+			buildConfigField 'boolean', 'ENABLE_VIDEO_COMPRESSION', 'true'
 			dimension = 'distribution'
 			buildConfigField 'boolean', 'ENABLE_APP_SECURITY_SETTINGS', 'true'
 			buildConfigField 'boolean', 'ENABLE_LOCAL_TRANSLATION', 'true'
@@ -734,8 +734,8 @@ dependencies {
 	implementation 'androidx.browser:browser:1.10.0'
 	implementation 'androidx.work:work-runtime:2.12.0'
 	// Attachment export only; the existing FFmpeg player remains independent.
-	githubImplementation 'androidx.media3:media3-transformer:1.11.1'
-	githubImplementation 'androidx.media3:media3-effect:1.11.1'
+	implementation 'androidx.media3:media3-transformer:1.11.1'
+	implementation 'androidx.media3:media3-effect:1.11.1'
 	implementation 'org.jsoup:jsoup:1.23.2'
 	testImplementation 'junit:junit:4.13.2'
 	androidTestImplementation 'androidx.test:core:1.7.0'

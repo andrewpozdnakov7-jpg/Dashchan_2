@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.widget;
 
 import android.app.Dialog;
+import android.view.WindowManager;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -16,6 +17,11 @@ public class RuleEditorPageTest {
             Dialog dialog = page.dialog();
             assertFalse(dialog.isShowing());
             assertNotNull(dialog.findViewById(R.id.value));
+            int softInputMode = dialog.getWindow().getAttributes().softInputMode;
+            assertEquals(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING,
+                    softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST);
+            assertEquals(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN,
+                    softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE);
         });
     }
 

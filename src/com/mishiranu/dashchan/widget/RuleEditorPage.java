@@ -107,10 +107,14 @@ public final class RuleEditorPage {
     }
     public Dialog dialog() {
         Dialog dialog = new SecureDialog(host, dark ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
-        Window w = dialog.getWindow();
-        w.setBackgroundDrawable(new ColorDrawable(colors.surface)); w.setDimAmount(0);
-        WindowCompat.setDecorFitsSystemWindows(w, false);
-        w.setStatusBarColor(Color.TRANSPARENT); w.setNavigationBarColor(Color.TRANSPARENT);
+        Window window = dialog.getWindow();
+        window.setBackgroundDrawable(new ColorDrawable(colors.surface));
+        window.setDimAmount(0);
+        window.getDecorView();
+        boolean enforceNavigationContrast = window.isNavigationBarContrastEnforced();
+        WindowCompat.enableEdgeToEdge(window);
+        // Keep the theme's contrast policy for three-button navigation.
+        window.setNavigationBarContrastEnforced(enforceNavigationContrast);
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View view) {
@@ -126,14 +130,18 @@ public final class RuleEditorPage {
             @Override
             public void onViewDetachedFromWindow(View view) {}
         });
-        ViewCompat.setOnApplyWindowInsetsListener(root, (v, wi) -> {
-            Insets bars = wi.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            int bottom = Math.max(bars.bottom, wi.getInsets(WindowInsetsCompat.Type.ime()).bottom);
-            v.setPadding(bars.left, bars.top, bars.right, bottom); return wi;
+        ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            int bottom = Math.max(bars.bottom, insets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+            view.setPadding(bars.left, bars.top, bars.right, bottom);
+            return insets;
         });
-        dialog.setContentView(root); dialog.setCanceledOnTouchOutside(false);
-        w.setLayout(MATCH, MATCH);
-        w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+        dialog.setContentView(root);
+        dialog.setCanceledOnTouchOutside(false);
+        window.setLayout(MATCH, MATCH);
+        // The root's insets listener owns the space for the IME.
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         return dialog;
     }
     public boolean scopeOpen() { return scopeBox.getVisibility() == View.VISIBLE; }

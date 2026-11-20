@@ -5,11 +5,15 @@ import androidx.annotation.StringRes;
 import com.mishiranu.dashchan.R;
 
 final class ImageSearchProvider {
+	private enum LocalImageHandling {PASS_URL, UPLOAD, HIDE}
+
 	private static final ImageSearchProvider[] PROVIDERS = {
 			new ImageSearchProvider(R.string.search_image_google_lens,
-					"lens.google.com", "uploadbyurl", "url", false, false),
+					"lens.google.com", "uploadbyurl", "url", false, LocalImageHandling.PASS_URL),
 			new ImageSearchProvider(R.string.search_image_yandex,
-					"yandex.ru", "images/search", "url", false, true, "rpt", "imageview")
+					"yandex.ru", "images/search", "url", false, LocalImageHandling.UPLOAD, "rpt", "imageview"),
+			new ImageSearchProvider(R.string.search_image_tineye,
+					"tineye.com", "search/", "url", false, LocalImageHandling.HIDE)
 	};
 
 	public static ImageSearchProvider[] getProviders() {
@@ -22,11 +26,11 @@ final class ImageSearchProvider {
 	private final String path;
 	private final String urlParameter;
 	private final boolean preferPreview;
-	private final boolean uploadLocal;
+	private final LocalImageHandling localImageHandling;
 	private final String[] queryParameters;
 
 	private ImageSearchProvider(@StringRes int titleResId, String host, String path, String urlParameter,
-			boolean preferPreview, boolean uploadLocal, String... queryParameters) {
+			boolean preferPreview, LocalImageHandling localImageHandling, String... queryParameters) {
 		if (queryParameters.length % 2 != 0) {
 			throw new IllegalArgumentException("Query parameters must be key-value pairs");
 		}
@@ -35,7 +39,7 @@ final class ImageSearchProvider {
 		this.path = path;
 		this.urlParameter = urlParameter;
 		this.preferPreview = preferPreview;
-		this.uploadLocal = uploadLocal;
+		this.localImageHandling = localImageHandling;
 		this.queryParameters = queryParameters.clone();
 	}
 
@@ -43,12 +47,20 @@ final class ImageSearchProvider {
 		return preferPreview && previewUri != null ? previewUri : imageUri;
 	}
 
+	private static boolean isHttpUri(Uri uri) {
+		String scheme = uri != null ? uri.getScheme() : null;
+		return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+	}
+
+	public boolean isAvailable(Uri imageUri, Uri previewUri) {
+		if (localImageHandling != LocalImageHandling.HIDE) return true;
+		Uri sourceUri = getSourceUri(imageUri, previewUri);
+		return isHttpUri(sourceUri) && sourceUri.getHost() != null && !sourceUri.getHost().isEmpty()
+				&& sourceUri.getUserInfo() == null;
+	}
+
 	public boolean requiresUpload(Uri imageUri, Uri previewUri) {
-		if (!uploadLocal) {
-			return false;
-		}
-		String scheme = getSourceUri(imageUri, previewUri).getScheme();
-		return !"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme);
+		return localImageHandling == LocalImageHandling.UPLOAD && !isHttpUri(getSourceUri(imageUri, previewUri));
 	}
 
 	public Uri buildSearchUri(Uri imageUri, Uri previewUri) {

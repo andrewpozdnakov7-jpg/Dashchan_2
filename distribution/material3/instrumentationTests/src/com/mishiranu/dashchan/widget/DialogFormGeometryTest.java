@@ -1,8 +1,12 @@
 package com.mishiranu.dashchan.widget;
 
 import static org.junit.Assert.*;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -15,20 +19,6 @@ import org.junit.runner.RunWith;
 /** Parent-budget and scroll-ownership fixtures. SOURCE ONLY / NOT RUN. */
 @RunWith(AndroidJUnit4.class)
 public class DialogFormGeometryTest {
-	private Boolean previousIme;
-	@org.junit.Before public void enableNewIme() {
-		com.mishiranu.dashchan.util.SharedPreferences p = com.mishiranu.dashchan.content.Preferences.PREFERENCES;
-		previousIme = p.contains(com.mishiranu.dashchan.content.Preferences.KEY_DIALOG_FORM_IME)
-				? p.getBoolean(com.mishiranu.dashchan.content.Preferences.KEY_DIALOG_FORM_IME, false) : null;
-		try (com.mishiranu.dashchan.util.SharedPreferences.Editor e = p.edit()) { e.put(com.mishiranu.dashchan.content.Preferences.KEY_DIALOG_FORM_IME, true); }
-	}
-	@org.junit.After public void restoreIme() {
-		try (com.mishiranu.dashchan.util.SharedPreferences.Editor e = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
-			if (previousIme == null) e.remove(com.mishiranu.dashchan.content.Preferences.KEY_DIALOG_FORM_IME);
-			else e.put(com.mishiranu.dashchan.content.Preferences.KEY_DIALOG_FORM_IME, previousIme);
-		}
-	}
-
 	private static View contentWithHeight(Context context, int height) {
 		View child = new View(context);
 		child.setMinimumHeight(height);
@@ -39,37 +29,24 @@ public class DialogFormGeometryTest {
 		view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, mode));
 		view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
 	}
-	@Test public void disabledModeKeepsPublishedMeasurementAndWindowPolicy() {
+	@Test public void formFitsImeInsetsWhilePreservingTheKeyboardVisibilityPolicy() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			try (com.mishiranu.dashchan.util.SharedPreferences.Editor e = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
-				e.put(com.mishiranu.dashchan.content.Preferences.KEY_DIALOG_FORM_IME, false);
-			}
-			android.content.Context context = PostingTestContext.create();
-			DialogFormScrollView actual = new DialogFormScrollView(context);
-			ScrollView published = new ScrollView(context) {
-				private final android.graphics.Rect visible = new android.graphics.Rect();
-				@Override protected void onMeasure(int width, int height) {
-					getWindowVisibleDisplayFrame(visible);
-					int available = visible.height() > 0 ? visible.height()
-							: com.mishiranu.dashchan.util.ViewUtils.getWindowContentSize(getContext()).y;
-					int cap = Math.min(available, StandardAppearance.dp(this, AppearanceShapes.DIALOG_FORM_MAX_HEIGHT));
-					if (MeasureSpec.getMode(height) != MeasureSpec.UNSPECIFIED) cap = Math.min(cap, MeasureSpec.getSize(height));
-					super.onMeasure(width, MeasureSpec.makeMeasureSpec(Math.max(0, cap), MeasureSpec.AT_MOST));
-				}
-			};
-			actual.addView(contentWithHeight(context, 3000), new ScrollView.LayoutParams(-1, -2));
-			published.addView(contentWithHeight(context, 3000), new ScrollView.LayoutParams(-1, -2));
-			for (int mode : new int[] {View.MeasureSpec.EXACTLY, View.MeasureSpec.AT_MOST, View.MeasureSpec.UNSPECIFIED}) {
-				layout(actual, 500, 600, mode); layout(published, 500, 600, mode);
-				assertEquals(published.getMeasuredHeight(), actual.getMeasuredHeight());
-			}
-			android.app.AlertDialog dialog = MotionDialogBuilder.standard(context).setMessage("Fixture").create();
-			android.view.WindowManager.LayoutParams before = new android.view.WindowManager.LayoutParams();
-			before.copyFrom(dialog.getWindow().getAttributes());
+			Context context = PostingTestContext.create();
+			AlertDialog dialog = MotionDialogBuilder.standard(context).setMessage("Fixture").create();
+			Window window = dialog.getWindow();
+			assertNotNull(window);
+			window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+			WindowManager.LayoutParams before = new WindowManager.LayoutParams();
+			before.copyFrom(window.getAttributes());
 			DialogFormInsets.configure(dialog);
-			assertEquals(before.softInputMode, dialog.getWindow().getAttributes().softInputMode);
-			assertEquals(before.getFitInsetsTypes(), dialog.getWindow().getAttributes().getFitInsetsTypes());
-			assertEquals(before.isFitInsetsIgnoringVisibility(), dialog.getWindow().getAttributes().isFitInsetsIgnoringVisibility());
+			WindowManager.LayoutParams after = window.getAttributes();
+			assertEquals(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN,
+					after.softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE);
+			assertEquals(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING,
+					after.softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST);
+			assertEquals(before.getFitInsetsTypes() | WindowInsets.Type.ime(), after.getFitInsetsTypes());
+			assertEquals(before.getFitInsetsSides(), after.getFitInsetsSides());
+			assertFalse(after.isFitInsetsIgnoringVisibility());
 		});
 	}
 	@Test public void modernViewportWrapsCapsAndRespectsAnExactOuterSlot() {

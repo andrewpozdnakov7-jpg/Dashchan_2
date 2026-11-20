@@ -38,9 +38,9 @@ import java.util.UUID;
 import java.util.concurrent.Future;
 import com.mishiranu.dashchan.content.database.ChanDatabase;
 import com.mishiranu.dashchan.content.database.CommonDatabase;
+import com.mishiranu.dashchan.content.database.PagesDatabase;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PendingUserPost;
-import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.push.ReplyPushManager;
 import com.mishiranu.dashchan.content.storage.DraftsStorage;
@@ -704,8 +704,8 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 				if (postNumber != null) {
 					String ownComment = comment;
 					OwnPostRegistration.register(Preferences.isShowMyPosts(), Preferences.isTrackMyPostsEnabled(), () -> {
-						CommonDatabase.getInstance().getPosts().setFlags(true, chanName, data.boardName,
-								targetThreadNumber, postNumber, PostItem.HideState.UNDEFINED, true);
+						CommonDatabase.getInstance().getPosts().registerOwnPost(true,
+								new PagesDatabase.ThreadKey(chanName, data.boardName, targetThreadNumber), postNumber);
 					}, () -> {
 						MyPostsStorage.getInstance().add(chanName, data.boardName, targetThreadNumber,
 								postNumber, ownComment, System.currentTimeMillis());
@@ -714,8 +714,6 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 					});
 				} else if (newThread) {
 					pendingUserPost = PendingUserPost.NewThread.INSTANCE;
-				} else {
-					pendingUserPost = new PendingUserPost.SimilarComment(comment, System.currentTimeMillis());
 				}
 				if (pendingUserPost != null) {
 					HashSet<PendingUserPost> pendingUserPosts = PENDING_USER_POST_MAP.get(arrayKey);
@@ -945,17 +943,6 @@ public class PostingService extends BaseService implements SendPostTask.Callback
 	}
 
 	private static final HashMap<Key, HashSet<PendingUserPost>> PENDING_USER_POST_MAP = new HashMap<>();
-
-	public static void registerPendingUserPost(String chanName, String boardName, String threadNumber,
-			String comment) {
-		Key key = new Key(chanName, boardName, threadNumber);
-		HashSet<PendingUserPost> pendingUserPosts = PENDING_USER_POST_MAP.get(key);
-		if (pendingUserPosts == null) {
-			pendingUserPosts = new HashSet<>(1);
-			PENDING_USER_POST_MAP.put(key, pendingUserPosts);
-		}
-		pendingUserPosts.add(new PendingUserPost.SimilarComment(comment, System.currentTimeMillis()));
-	}
 
 	public static Set<PendingUserPost> getPendingUserPosts(String chanName, String boardName,
 			String threadNumber) {
