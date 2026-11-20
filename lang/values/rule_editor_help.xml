@@ -1,0 +1,24 @@
+<resources>
+  <string name="pin_help_title">What your PIN protects</string>
+  <string name="pin_access">App access</string>
+  <string name="pin_access_body">Your PIN locks Slooop. It does not encrypt stored data or protect it on a compromised device.</string>
+  <string name="pin_forgot">If you forget your PIN</string>
+  <string name="pin_forgot_body">Your PIN cannot be recovered. Clearing app data deletes your local profile.</string>
+  <string name="pin_erase">Profile cleanup</string>
+  <string name="pin_erase_body">The additional PIN starts cleanup. Copies outside the selected folder remain. Some deleted data may be recoverable.</string>
+  <string name="rule_edit_title">Edit rule</string>
+  <string name="rule_where">Search in</string>
+  <string name="rule_which">Posts to hide</string>
+  <string name="rule_filename">File name</string>
+  <string name="rule_op">Opening posts</string>
+  <string name="rule_replies">Replies</string>
+  <string name="rule_sage">Only posts with sage</string>
+  <string name="rule_scope">Applies to</string>
+  <string name="rule_thread_number">Thread number</string>
+  <string name="rule_try">Try an example</string>
+  <string name="rule_expanded">Expanded</string>
+  <string name="rule_collapsed">Collapsed</string>
+  <string name="rule_error">Invalid expression: %1$s</string>
+  <string name="rule_delete_prompt">Delete this rule?</string>
+  <string name="rule_empty_prompt">The expression is empty. Any text in the selected fields and posts will match. Save this rule?</string>
+</resources>

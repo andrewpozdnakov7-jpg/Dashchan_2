@@ -38,22 +38,25 @@ public final class ThreadFabMenu extends FrameLayout {
 		public final int longPressId, longPressTitle;
 		public final boolean enabled;
 		public final boolean opensSurface;
+		public final boolean longPressOpensSurface;
 		public final boolean selected;
 		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface) {
 			this(id, title, icon, enabled, opensSurface, false);
 		}
 		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface, boolean selected) {
-			this(id, title, icon, enabled, opensSurface, selected, 0, 0);
+			this(id, title, icon, enabled, opensSurface, selected, 0, 0, false);
 		}
 		public Action(int id, int title, int icon, boolean enabled, boolean opensSurface, boolean selected,
-				int longPressId, int longPressTitle) {
+				int longPressId, int longPressTitle, boolean longPressOpensSurface) {
 			this.id = id; this.title = title; this.icon = icon; this.enabled = enabled;
 			this.opensSurface = opensSurface; this.selected = selected;
 			this.longPressId = longPressId; this.longPressTitle = longPressTitle;
+			this.longPressOpensSurface = longPressOpensSurface;
 		}
 	}
 	public interface Host {
 		boolean isAvailable();
+		Action getSingleAction();
 		List<Action> getActions();
 		void onAction(int id);
 		void onOpenChanged();
@@ -66,7 +69,9 @@ public final class ThreadFabMenu extends FrameLayout {
 	private final View scrim;
 	private final ImageButton fab;
 	private final GradientDrawable fabShape = new GradientDrawable();
-	private final Drawable moreIcon, closeIcon;
+	private final Drawable moreIcon, closeIcon, menuIcon;
+	private Drawable singleIcon;
+	private Action singleAction;
 	private final ScrollView scroller;
 	private final LinearLayout actions;
 	private final int fabSize, fabMargin;
@@ -146,14 +151,33 @@ public final class ThreadFabMenu extends FrameLayout {
 		fab = new ImageButton(getContext());
 		moreIcon = getContext().getDrawable(R.drawable.ic_thread_fab_more).mutate();
 		closeIcon = getContext().getDrawable(R.drawable.ic_close).mutate();
-		fab.setImageDrawable(new android.graphics.drawable.LayerDrawable(new Drawable[] {moreIcon, closeIcon}));
+		menuIcon = new android.graphics.drawable.LayerDrawable(new Drawable[] {moreIcon, closeIcon});
+		fab.setImageDrawable(menuIcon);
 		fabShape.setCornerRadius(getResources().getDimension(R.dimen.thread_fab_corner_radius));
 		fab.setBackground(new RippleDrawable(ColorStateList.valueOf(colors.ripple), fabShape, null));
 		fab.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
 		int iconPadding = (fabSize - getResources().getDimensionPixelSize(R.dimen.thread_fab_compact_icon_size)) / 2;
 		fab.setPadding(iconPadding, iconPadding, iconPadding, iconPadding);
 		fab.setElevation(getResources().getDimension(R.dimen.thread_fab_elevation));
-		fab.setOnClickListener(v -> { if (opened) close(true, true); else open(); });
+		fab.setOnClickListener(v -> {
+			if (opened) close(true, true);
+			else activateFab(false);
+		});
+		fab.setOnLongClickListener(v -> {
+			v.setHapticFeedbackEnabled(activateFab(true));
+			// A hold must never fall through to ordinary refresh on release.
+			return true;
+		});
+		fab.setLongClickable(false);
+		fab.setAccessibilityDelegate(new AccessibilityDelegate() {
+			@Override public void onInitializeAccessibilityNodeInfo(View view, AccessibilityNodeInfo info) {
+				super.onInitializeAccessibilityNodeInfo(view, info);
+				if (view.isLongClickable() && singleAction != null) {
+					info.addAction(new AccessibilityNodeInfo.AccessibilityAction(
+							AccessibilityNodeInfo.ACTION_LONG_CLICK, getContext().getString(singleAction.longPressTitle)));
+				}
+			}
+		});
 		addView(fab);
 		setVisibility(INVISIBLE);
 		finishClosed();
@@ -194,7 +218,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		boolean show = available && (!scrollHidden || opened);
 		boolean changed = fabShown != show;
 		fabShown = show;
-		fab.setClickable(show); fab.setFocusable(show);
+		updateFabInput();
 		if (!show) { fab.cancelPendingInputEvents(); fab.setPressed(false); }
 		setImportantForAccessibility(show ? IMPORTANT_FOR_ACCESSIBILITY_AUTO : IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 		if (!changed && animate) return;
@@ -231,6 +255,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
 		boolean visible = !disposed && enabled && active && hasWindowFocus() && host.isAvailable()
 				&& (insets == null || !insets.isVisible(WindowInsetsCompat.Type.ime()));
+		if (!opened) updateSingleAction(visible ? host.getSingleAction() : null);
 		if (available != visible) {
 			available = visible;
 			scrollHidden = false; scrollTravel = 0f;
@@ -243,6 +268,32 @@ public final class ThreadFabMenu extends FrameLayout {
 		// Insets may change without a size change. Use the owner's padding, subtracting already
 		// consumed ancestor insets, and reserve the full scrollbar hit strip throughout scrolling.
 		if (updateSafeBounds()) requestLayout();
+	}
+
+	private void updateSingleAction(Action action) {
+		if (singleAction == action) return;
+		singleAction = action;
+		singleIcon = action != null ? getContext().getDrawable(action.icon).mutate() : null;
+		fab.setImageDrawable(singleIcon != null ? singleIcon : menuIcon);
+		fab.setEnabled(action == null || action.enabled);
+		fab.setSelected(action != null && action.selected);
+		fab.cancelPendingInputEvents();
+		fab.setPressed(false);
+		updateFabInput();
+		updateFabShape();
+		updateFabDescription();
+	}
+
+	private void updateFabInput() {
+		fab.setClickable(fabShown);
+		fab.setFocusable(fabShown);
+		fab.setLongClickable(fabShown && singleAction != null && singleAction.enabled && singleAction.longPressId != 0);
+	}
+
+	private void updateFabDescription() {
+		int title = opened ? R.string.thread_fab_close
+				: singleAction != null ? singleAction.title : R.string.thread_fab_actions;
+		fab.setContentDescription(getContext().getText(title));
 	}
 
 	private boolean updateSafeBounds() {
@@ -264,9 +315,23 @@ public final class ThreadFabMenu extends FrameLayout {
 		return changed;
 	}
 
-	private void open() {
+	private boolean activateFab(boolean longPress) {
+		Action shownAction = singleAction;
 		syncAvailability();
-		if (!available || !fabShown || opened) return;
+		if (!available || !fabShown || opened || shownAction != singleAction) return false;
+		if (shownAction != null) {
+			int id = longPress ? shownAction.longPressId : shownAction.id;
+			if (!shownAction.enabled || id == 0) return false;
+			host.onAction(id);
+		} else if (!longPress) {
+			open();
+		} else {
+			return false;
+		}
+		return true;
+	}
+
+	private void open() {
 		scrollHidden = false; scrollTravel = 0f;
 		updateFabVisibility(false);
 		boolean continuing = scroller.getVisibility() == VISIBLE;
@@ -329,7 +394,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		}
 		animateMenu(true, duration);
 		animateShape(true, duration);
-		fab.setContentDescription(getContext().getString(R.string.thread_fab_close));
+		updateFabDescription();
 		host.onOpenChanged();
 		requestLayout();
 		// Do not replace the accessibility tree again while opening.
@@ -344,7 +409,8 @@ public final class ThreadFabMenu extends FrameLayout {
 			int id = longPress ? current.longPressId : current.id;
 			if (id == 0) return false;
 			// New surfaces own focus; never restore focus behind their window.
-			close(false, !current.opensSurface);
+			boolean opensSurface = longPress ? current.longPressOpensSurface : current.opensSurface;
+			close(false, !opensSurface);
 			host.onAction(id);
 			return true;
 		}
@@ -373,7 +439,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		long duration = animate ? InterfaceMotion.duration(180) : 0;
 		animateMenu(false, duration);
 		animateShape(false, duration);
-		fab.setContentDescription(getContext().getString(R.string.thread_fab_actions));
+		updateFabDescription();
 		host.onOpenChanged();
 		if (restoreFocus && available) {
 			fab.requestFocus();
@@ -427,7 +493,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		scroller.setScaleX(.96f); scroller.setScaleY(.96f);
 		scroller.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 		scroller.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
-		fab.setContentDescription(getContext().getString(R.string.thread_fab_actions));
+		updateFabDescription();
 	}
 	private Drawable actionBackground() {
 		GradientDrawable mask = new GradientDrawable();
@@ -439,6 +505,7 @@ public final class ThreadFabMenu extends FrameLayout {
 		int tint = androidx.core.graphics.ColorUtils.blendARGB(colors.onPrimaryContainer, colors.onPrimary, shapeProgress);
 		moreIcon.setTint(tint); closeIcon.setTint(tint);
 		moreIcon.setAlpha(Math.round(255 * (1 - shapeProgress))); closeIcon.setAlpha(Math.round(255 * shapeProgress));
+		if (singleIcon != null) singleIcon.setTint(singleAction.enabled ? tint : colors.disabledContent);
 	}
 	private void animateShape(boolean open, long duration) {
 		if (shapeAnimator != null) { shapeAnimator.cancel(); shapeAnimator = null; }

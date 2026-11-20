@@ -64,6 +64,7 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 		}
 		addChanPreference(chans.remove("dvach"));
 		addChanPreference(chans.remove("fourchan"));
+		addChanPreference(chans.remove("soyjak"));
 		addChanPreference(chans.remove("ejchan"));
 		addChanPreference(chans.remove("apachan"));
 		addChanPreference(chans.remove("arhivach"));
@@ -90,7 +91,8 @@ public class ChansFragment extends PreferenceFragment implements FragmentHandler
 				: "pikabu".equals(chan.name) ? R.string.forum_pikabu
 				: "d3ru".equals(chan.name) ? R.string.forum_d3 : 0;
 		CharSequence title = titleResId != 0 ? getString(titleResId) : chan.configuration.getTitle();
-		CharSequence summary = "fourchan".equals(chan.name) || "arhivach".equals(chan.name)
+		CharSequence summary = "soyjak".equals(chan.name) ? getString(R.string.experimental_read_only)
+				: "fourchan".equals(chan.name) || "arhivach".equals(chan.name)
 				|| "d3ru".equals(chan.name)
 				? getString(R.string.read_only) : null;
 		addForumPreference(chan.name, title, summary, () -> ((FragmentHandler) requireActivity())

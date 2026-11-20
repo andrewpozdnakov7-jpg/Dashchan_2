@@ -18,6 +18,7 @@ import androidx.lifecycle.LifecycleRegistry;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakReadRecovery;
 import com.mishiranu.dashchan.content.model.ErrorItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.ui.InstanceDialog;
@@ -43,22 +44,42 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 		private static final InitRequest EMPTY_REQUEST = new InitRequest(false, null, null);
 
 		public final boolean shouldLoad;
+		public final boolean openCatalog;
 		public final PostNumber postNumber;
 		public final String threadTitle;
 		public final ErrorItem errorItem;
+		public final SoyjakReadRecovery.Result recovered;
 
 		public InitRequest(boolean shouldLoad, PostNumber postNumber, String threadTitle) {
+			this(shouldLoad, postNumber, threadTitle, false, null);
+		}
+
+		private InitRequest(boolean shouldLoad, PostNumber postNumber, String threadTitle, boolean openCatalog,
+				SoyjakReadRecovery.Result recovered) {
 			this.shouldLoad = shouldLoad;
+			this.openCatalog = openCatalog;
 			this.postNumber = postNumber;
 			this.threadTitle = threadTitle;
 			errorItem = null;
+			this.recovered = recovered;
 		}
 
 		public InitRequest(ErrorItem errorItem) {
 			shouldLoad = false;
+			openCatalog = false;
 			postNumber = null;
 			threadTitle = null;
 			this.errorItem = errorItem;
+			recovered = null;
+		}
+
+		public static InitRequest recovered(SoyjakReadRecovery.Result result, InitRequest previous) {
+			return new InitRequest(false, previous != null ? previous.postNumber : null,
+					previous != null ? previous.threadTitle : null, false, result);
+		}
+
+		public static InitRequest catalog() {
+			return new InitRequest(true, null, null, true, null);
 		}
 	}
 
@@ -222,6 +243,14 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 
 	protected final void switchError(ErrorItem errorItem) {
 		callback.switchError(errorItem != null ? errorItem : new ErrorItem(ErrorItem.Type.UNKNOWN));
+	}
+
+	protected final boolean showBrowserChallenge(ErrorItem errorItem) { return callback.showBrowserChallenge(errorItem); }
+
+	protected final void clearBrowserChallenge() { callback.clearBrowserChallenge(); }
+
+	public void retryBrowserChallenge() {
+		onListPulled(getRecyclerView().getPullable(), PullableWrapper.Side.TOP);
 	}
 
 	protected final void switchError(String message) {
@@ -395,6 +424,8 @@ public abstract class ListPage implements LifecycleOwner, PullableWrapper.PullCa
 		void switchList();
 		void switchProgress();
 		void switchError(ErrorItem errorItem);
+		default boolean showBrowserChallenge(ErrorItem errorItem) { return false; }
+		default void clearBrowserChallenge() {}
 		void showScaleAnimation();
 		void handleRedirect(String chanName, String boardName, String threadNumber, PostNumber postNumber);
 		void closePage();

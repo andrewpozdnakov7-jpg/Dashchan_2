@@ -76,15 +76,29 @@ public final class SecurityFragment extends PreferenceFragment {
 		remove.setOnClickListener(p -> open(AppLockActivity.REMOVE_ADDITIONAL)); protectedItems.add(remove);
 		Preference<?> disable = addButton(R.string.security_disable, 0);
 		disable.setOnClickListener(p -> open(AppLockActivity.DISABLE)); protectedItems.add(disable);
-		addButton(R.string.security_limits, 0).setOnClickListener(p ->
-				new com.mishiranu.dashchan.widget.MotionDialogBuilder(requireContext())
+		boolean compactHelp = com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled();
+		addButton(compactHelp ? R.string.pin_help_title : R.string.security_limits, 0).setOnClickListener(p -> {
+			if (com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()) {
+				if (getChildFragmentManager().findFragmentByTag("pinHelp") == null)
+					new PinHelp().show(getChildFragmentManager(), "pinHelp");
+				return;
+			}
+			// design-exception(D1): Preserve the original PIN help layout when compact dialogs are disabled.
+			new com.mishiranu.dashchan.widget.MotionDialogBuilder(requireContext())
 						.setTitle(R.string.security_limits).setMessage(R.string.security_limits_summary)
-						.setPositiveButton(android.R.string.ok, null).show());
+						.setPositiveButton(android.R.string.ok, null).show();
+		});
 		addButton(R.string.security_guide, 0).setOnClickListener(p ->
 				NavigationUtils.openSystemBrowser(requireContext(), Uri.parse(GUIDE_URL
 						+ ("ru".equals(getResources().getConfiguration().getLocales().get(0).getLanguage())
 						? "" : "-English"))));
 	}
+	public static class PinHelp extends androidx.fragment.app.DialogFragment {
+		@NonNull @Override public android.app.Dialog onCreateDialog(Bundle state) {
+			return com.mishiranu.dashchan.widget.PinProtectionHelp.create(requireContext());
+		}
+	}
+
 	private void button(int title, String action, String field) {
 		Preference<?> item = addButton(getString(title), p -> {
 			try { return getString(SecurityStore.update(requireContext(), s -> "biometric".equals(field)

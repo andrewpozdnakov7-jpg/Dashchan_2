@@ -1,0 +1,24 @@
+<resources>
+  <string name="pin_help_title">Что защищает PIN</string>
+  <string name="pin_access">Вход в приложение</string>
+  <string name="pin_access_body">PIN закрывает доступ к Slooop. Он не шифрует сохранённые данные и не защищает их на взломанном устройстве.</string>
+  <string name="pin_forgot">Если забыли PIN</string>
+  <string name="pin_forgot_body">Восстановить код нельзя. Сброс данных приложения удалит локальный профиль.</string>
+  <string name="pin_erase">Очистка профиля</string>
+  <string name="pin_erase_body">Дополнительный PIN запускает очистку. Копии вне выбранной папки останутся. Некоторые удалённые данные можно восстановить.</string>
+  <string name="rule_edit_title">Редактировать правило</string>
+  <string name="rule_where">Где искать</string>
+  <string name="rule_which">Какие посты скрывать</string>
+  <string name="rule_filename">Имя файла</string>
+  <string name="rule_op">ОП-посты</string>
+  <string name="rule_replies">Ответы</string>
+  <string name="rule_sage">Только с sage</string>
+  <string name="rule_scope">Область действия</string>
+  <string name="rule_thread_number">Номер треда</string>
+  <string name="rule_try">Проверить на примере</string>
+  <string name="rule_expanded">Развёрнуто</string>
+  <string name="rule_collapsed">Свёрнуто</string>
+  <string name="rule_error">Ошибка в выражении: %1$s</string>
+  <string name="rule_delete_prompt">Удалить это правило?</string>
+  <string name="rule_empty_prompt">Выражение пустое. Правило будет совпадать с любым текстом в выбранных полях и постах. Сохранить?</string>
+</resources>

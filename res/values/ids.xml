@@ -19,6 +19,14 @@
 	<item type="id" name="menu_attach" />
 	<item type="id" name="menu_cards" />
 	<item type="id" name="menu_catalog" />
+	<item type="id" name="menu_soyjak_webview" />
+	<item type="id" name="menu_soyjak_open_page" />
+	<item type="id" name="menu_soyjak_retry" />
+	<item type="id" name="menu_soyjak_diagnostics" />
+	<item type="id" name="menu_soyjak_external_browser" />
+	<item type="id" name="menu_soyjak_read_catalog" />
+	<item type="id" name="menu_soyjak_show_site" />
+	<item type="id" name="menu_soyjak_file_on_site" />
 	<item type="id" name="menu_change_theme" />
 	<item type="id" name="menu_clear" />
 	<item type="id" name="menu_clear_deleted" />

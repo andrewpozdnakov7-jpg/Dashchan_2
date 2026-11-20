@@ -156,6 +156,7 @@ public class UiManager {
 
 	public interface LocalNavigator {
 		void navigateBoardsOrThreads(String chanName, String boardName);
+		void navigateBoardCatalog(String chanName, String boardName);
 		void navigatePosts(String chanName, String boardName, String threadNumber,
 				PostNumber postNumber, String threadTitle);
 		default void navigatePostsFromCard(String chanName, String boardName, String threadNumber,

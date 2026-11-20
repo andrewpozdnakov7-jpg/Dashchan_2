@@ -99,14 +99,22 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 		}
 	}
 
+	private final ChanPerformer.ReadPostsResult recovered;
+
 	public ReadPostsTask(Callback callback, Chan chan, String boardName, String threadNumber,
 			boolean loadFullThread, Collection<PendingUserPost> pendingUserPosts) {
+		this(callback, chan, boardName, threadNumber, loadFullThread, pendingUserPosts, null);
+	}
+
+	public ReadPostsTask(Callback callback, Chan chan, String boardName, String threadNumber,
+			boolean loadFullThread, Collection<PendingUserPost> pendingUserPosts, ChanPerformer.ReadPostsResult recovered) {
 		super(chan);
 		this.callback = callback;
 		this.chan = chan;
 		this.boardName = boardName;
 		this.threadNumber = threadNumber;
 		this.loadFullThread = loadFullThread;
+		this.recovered = recovered;
 		this.pendingUserPosts = pendingUserPosts != null ? new HashSet<>(pendingUserPosts) : null;
 	}
 
@@ -153,13 +161,14 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 			allowPartialThreadLoading = originalPost == null || !originalPost.isCyclical() ||
 					Preferences.getCyclicalRefreshMode() == Preferences.CyclicalRefreshMode.DEFAULT;
 		}
-		boolean partial = !loadFullThread && allowPartialThreadLoading && Preferences.isPartialThreadLoading(chan);
+		boolean partial = recovered != null || !loadFullThread && allowPartialThreadLoading
+				&& Preferences.isPartialThreadLoading(chan);
 		HttpValidator useValidator = !loadFullThread && meta != null ? meta.validator : null;
 		try {
 			ChanPerformer.ReadPostsResult result;
 			try {
 				String lastPostNumber = lastExistingPostNumber != null ? lastExistingPostNumber.toString() : null;
-				result = chan.performer.safe().onReadPosts(new ChanPerformer.ReadPostsData(chan.name, boardName,
+				result = recovered != null ? recovered : chan.performer.safe().onReadPosts(new ChanPerformer.ReadPostsData(chan.name, boardName,
 						threadNumber, lastPostNumber, partial, lastPostNumber != null, holder, useValidator));
 			} catch (ThreadRedirectException e) {
 				RedirectException.Target target = e.obtainTarget(chan.name, boardName);
@@ -194,7 +203,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 			if (validator == null) {
 				validator = useValidator;
 			}
-			if (result != null && !result.posts.isEmpty() && result.fullThread) {
+			if (recovered == null && result != null && !result.posts.isEmpty() && result.fullThread) {
 				partial = false;
 			}
 
@@ -254,7 +263,7 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 					}
 				}
 			}
-			updateTrackedThread(posts);
+			if (recovered == null) updateTrackedThread(posts);
 
 			PagesDatabase.InsertResult insertResult;
 			boolean newThread = meta == null;
@@ -267,11 +276,13 @@ public class ReadPostsTask extends HttpHolderTask<Void, ReadPostsTask.Result> {
 				if (uniquePosters <= 0 && meta != null) {
 					uniquePosters = meta.uniquePosters;
 				}
-				meta = new PagesDatabase.Meta(validator, archivedThreadUri, uniquePosters, false, false);
+				if (recovered == null || meta == null) {
+					meta = new PagesDatabase.Meta(validator, archivedThreadUri, uniquePosters, false, false);
+				}
 				insertResult = PagesDatabase.getInstance().insertNewPosts(threadKey,
-						posts, meta, temporary, newThread, partial, lastKnownPostNumber);
+						posts, meta, temporary, newThread, partial, lastKnownPostNumber, recovered != null);
 			} catch (IOException e) {
-				updateMeta = new UpdateMeta(false, true);
+				if (recovered == null) updateMeta = new UpdateMeta(false, true);
 				return new Result.Fail(new ErrorItem(ErrorItem.Type.NO_ACCESS_TO_MEMORY));
 			}
 			return new Result.Success(insertResult.cacheState, removedPendingUserPosts,

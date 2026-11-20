@@ -13,7 +13,7 @@ import com.mishiranu.dashchan.widget.ViewFactory;
 
 public abstract class Preference<T> {
 	public enum ViewType {NORMAL, CATEGORY, HEADER, CHECK, COLOR, FORUM, POPUP_APPEARANCE, DRAWER_SECTION,
-		TEXT_SIZE_PREVIEW, PLAYER_BUTTONS_PREVIEW, SWITCH}
+		TEXT_SIZE_PREVIEW, PLAYER_BUTTONS_PREVIEW, SWITCH, THREAD_FAB_ACTION}
 
 	public interface SummaryProvider<T> {
 		CharSequence getSummary(Preference<T> value);

@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.Slooop.RuleEditor.Light" parent="Theme.Material3.Light.NoActionBar"><item name="chipStyle">@style/Widget.Material3.Chip.Filter</item></style>
+    <style name="Theme.Slooop.RuleEditor.Dark" parent="Theme.Material3.Dark.NoActionBar"><item name="chipStyle">@style/Widget.Material3.Chip.Filter</item></style>
+</resources>

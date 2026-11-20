@@ -398,7 +398,8 @@ public final class SettingsSearchIndex {
 			add(context, entries, Screen.SECURITY, R.string.security_hide_pip_video, R.string.security_hide_pip_video_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_hide_reply_text, R.string.security_hide_reply_text_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_delete_downloads);
-			add(context, entries, Screen.SECURITY, R.string.security_limits, R.string.security_limits_summary, null);
+			add(context, entries, Screen.SECURITY, com.mishiranu.dashchan.widget.CompactDialogUi.isEnabled()
+					? R.string.pin_help_title : R.string.security_limits, R.string.security_limits_summary, null);
 			add(context, entries, Screen.SECURITY, R.string.security_guide);
 		}
 		add(context, entries, Screen.FORUMS, R.string.forums);
@@ -686,7 +687,10 @@ public final class SettingsSearchIndex {
 		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.compactDialogs());
 		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_menu,
 				R.string.thread_fab_menu_summary, Preferences.KEY_THREAD_FAB_MENU);
-		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_order, R.string.thread_fab_order_summary, null);
+		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_custom_order, R.string.thread_fab_order_summary,
+				Preferences.KEY_THREAD_FAB_CUSTOM_ORDER);
+		add(context, entries, Screen.THREAD_FAB, R.string.thread_fab_refresh_long_press, 0,
+				Preferences.KEY_THREAD_FAB_REFRESH_LONG_PRESS);
 		for (Preferences.ThreadFabAction action : Preferences.ThreadFabAction.values()) {
 			add(context, entries, Screen.THREAD_FAB, action.titleResId, 0, action.key);
 		}

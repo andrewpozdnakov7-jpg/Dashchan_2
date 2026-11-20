@@ -24,6 +24,7 @@ public class ReadThreadsTask extends HttpHolderTask<Void, Boolean> {
 	private final int pageNumber;
 	private final HttpValidator validator;
 	private final boolean append;
+	private final ChanPerformer.ReadThreadsResult recovered;
 
 	private ArrayList<PostItem> postItems;
 	private int boardSpeed = 0;
@@ -43,6 +44,11 @@ public class ReadThreadsTask extends HttpHolderTask<Void, Boolean> {
 
 	public ReadThreadsTask(Callback callback, Chan chan, String boardName, int pageNumber,
 			HttpValidator validator, boolean append) {
+		this(callback, chan, boardName, pageNumber, validator, append, null);
+	}
+
+	public ReadThreadsTask(Callback callback, Chan chan, String boardName, int pageNumber,
+			HttpValidator validator, boolean append, ChanPerformer.ReadThreadsResult recovered) {
 		super(chan);
 		this.callback = callback;
 		this.chan = chan;
@@ -50,6 +56,7 @@ public class ReadThreadsTask extends HttpHolderTask<Void, Boolean> {
 		this.pageNumber = pageNumber;
 		this.validator = validator;
 		this.append = append;
+		this.recovered = recovered;
 	}
 
 	public int getPageNumber() {
@@ -61,7 +68,7 @@ public class ReadThreadsTask extends HttpHolderTask<Void, Boolean> {
 		try {
 			ChanPerformer.ReadThreadsResult result;
 			try {
-				result = chan.performer.safe().onReadThreads(new ChanPerformer.ReadThreadsData(boardName,
+				result = recovered != null ? recovered : chan.performer.safe().onReadThreads(new ChanPerformer.ReadThreadsData(boardName,
 						pageNumber, holder, validator));
 			} catch (RedirectException e) {
 				RedirectException.Target target = e.obtainTarget(chan.name);

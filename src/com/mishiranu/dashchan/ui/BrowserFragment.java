@@ -22,17 +22,28 @@ import android.view.ViewGroup;
 import android.webkit.DownloadListener;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
+import androidx.lifecycle.ViewModelProvider;
 import chan.content.Chan;
 import chan.content.ChanLocator;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakBrowserSession;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakChanLocator;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakDiagnostics;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakReadRecovery;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakReaderPage;
+import com.mishiranu.dashchan.media.VideoDiagnostics;
+import com.mishiranu.dashchan.util.ConcurrentUtils;
+import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.AnimationUtils;
@@ -44,9 +55,34 @@ import com.mishiranu.dashchan.widget.ClickableToast;
 import com.mishiranu.dashchan.widget.ExpandedLayout;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.UUID;
+import org.json.JSONException;
+import org.json.JSONTokener;
 
 public class BrowserFragment extends ContentFragment implements DownloadListener {
 	private static final String EXTRA_URI = "uri";
+	private static final String EXTRA_SOYJAK_SITE = "soyjak.site";
+	private static final String EXTRA_RECOVERY_TOKEN = "soyjak.recovery";
+	private static final String READ_VISIBLE_DOCUMENT = """
+			(() => {
+				if (!document.body || (location.origin !== 'https://soyjak.st'
+						&& location.origin !== 'https://www.soyjak.st')) return null;
+				const text = document.contentType === 'application/json' || document.body.firstElementChild?.tagName === 'PRE'
+						? document.body.innerText : document.body.outerHTML;
+				return text.length <= 4000000 ? text : null;
+			})()
+			""";
+
+	public static BrowserFragment forSoyjakPage(Uri uri) {
+		BrowserFragment fragment = new BrowserFragment(uri);
+		fragment.requireArguments().putBoolean(EXTRA_SOYJAK_SITE, true);
+		return fragment;
+	}
+
+	public static BrowserFragment forSoyjakRecovery(SoyjakReadRecovery.Request request) {
+		BrowserFragment fragment = forSoyjakPage(request.uri());
+		fragment.requireArguments().putString(EXTRA_RECOVERY_TOKEN, request.token());
+		return fragment;
+	}
 
 	public BrowserFragment() {}
 
@@ -69,6 +105,80 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	private WebView webView;
 	private ProgressView progressView;
+	private SoyjakReadRecovery recovery;
+	private String recoveryToken;
+	private String readyDocument;
+	private String loadingDocument;
+	private boolean mainFrameFailed;
+	private long documentRevision;
+	private long readRevision = -1;
+
+	private boolean isSoyjakSite() {
+		Bundle arguments = getArguments();
+		return arguments != null && arguments.getBoolean(EXTRA_SOYJAK_SITE);
+	}
+
+	private SoyjakReadRecovery.Request pendingRecovery() {
+		return recovery != null ? recovery.find(recoveryToken) : null;
+	}
+
+	void allowRecoveryRetry() {
+		readRevision = -1;
+	}
+
+	private void cancelRecovery() {
+		if (recovery != null) recovery.cancel(recoveryToken);
+	}
+
+	private void readRecoveryDocument() {
+		SoyjakReadRecovery.Request request = pendingRecovery();
+		WebView source = webView;
+		String url = readyDocument;
+		long revision = documentRevision;
+		if (request == null || source == null || !isResumed() || !source.isShown() || mainFrameFailed
+				|| readRevision == revision || url == null || !url.equals(source.getUrl())
+				|| !SoyjakReaderPage.sameReaderTarget(request.uri().toString(), url)
+				|| !(Chan.get("soyjak").locator instanceof SoyjakChanLocator locator)) return;
+		readRevision = revision;
+		source.evaluateJavascript(READ_VISIBLE_DOCUMENT, value -> {
+			if (source != webView || revision != documentRevision || pendingRecovery() != request || !isResumed()) return;
+			ConcurrentUtils.PARALLEL_EXECUTOR.execute(() -> {
+				SoyjakReadRecovery.Result result = null;
+				try {
+					if (value != null && new JSONTokener(value).nextValue() instanceof String document) {
+						result = request.parse(document, Uri.parse(url), locator);
+					}
+				} catch (JSONException e) {
+					// A verification document can have the same URL. Wait for a subsequent document.
+				}
+				SoyjakReadRecovery.Result parsed = result;
+				source.post(() -> {
+					if (source != webView || revision != documentRevision || pendingRecovery() != request) return;
+					if (!isResumed() || !source.isShown() || getParentFragmentManager().isStateSaved()) {
+						readRevision = -1;
+						return;
+					}
+					if (!url.equals(source.getUrl()) || mainFrameFailed) return;
+					if (((FragmentHandler) requireActivity()).isContentObscured()) {
+						readRevision = -1;
+						return;
+					}
+					VideoDiagnostics.recordUi("soyjak_webview stage=native_recovery content=" + request.content()
+							+ " parsed=" + (parsed != null));
+					SoyjakDiagnostics.event("recovery_result", "parsed=" + (parsed != null)
+							+ " content=" + request.content());
+					if (parsed != null && requireActivity() instanceof MainActivity activity) {
+						activity.returnFromSoyjakVerification(this, () -> {
+							if (source == webView && revision == documentRevision && isResumed()
+									&& url.equals(source.getUrl()) && recovery.complete(parsed)) {
+								activity.removeFragment();
+							}
+						});
+					}
+				});
+			});
+		});
+	}
 
 	private String navigationDrawerLocker;
 
@@ -88,11 +198,23 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
 
+		Bundle arguments = getArguments();
+		recoveryToken = arguments != null ? arguments.getString(EXTRA_RECOVERY_TOKEN) : null;
+		if (recoveryToken != null) recovery = new ViewModelProvider(requireActivity()).get(SoyjakReadRecovery.class);
 		navigationDrawerLocker = "browser-" + UUID.randomUUID();
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, true);
 
 		WebSettings settings = webView.getSettings();
 		WebViewUtils.configureCommonSettings(settings);
+		if (arguments != null && arguments.getBoolean(EXTRA_SOYJAK_SITE)) {
+			// The clearance cookie issued by CloudFlare is bound to the exact user agent.
+			// The native stack uses the same advanced setting, so both sides must agree.
+			String userAgent = AdvancedPreferences.getUserAgent(SoyjakDiagnostics.CHAN_NAME);
+			if (!StringUtils.isEmpty(userAgent)) settings.setUserAgentString(userAgent);
+			SoyjakDiagnostics.event("webview_ua", "fp=" + SoyjakDiagnostics.fingerprint(settings.getUserAgentString())
+					+ " sameAsNative=" + settings.getUserAgentString().equals(
+					AdvancedPreferences.getUserAgent(SoyjakDiagnostics.CHAN_NAME)));
+		}
 		settings.setBuiltInZoomControls(true);
 		settings.setDisplayZoomControls(false);
 		settings.setUseWideViewPort(true);
@@ -123,8 +245,16 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	}
 
 	@Override
+	public void onDestroy() {
+		if (isRemoving() && getActivity() != null && !requireActivity().isChangingConfigurations()) cancelRecovery();
+		super.onDestroy();
+	}
+
+	@Override
 	public void onDestroyView() {
 		super.onDestroyView();
+		documentRevision++;
+		readyDocument = null;
 
 		((FragmentHandler) requireActivity()).setNavigationAreaLocked(navigationDrawerLocker, false);
 		if (webView != null) {
@@ -156,12 +286,16 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 	public void onPause() {
 		super.onPause();
 		if (webView != null) webView.onPause();
+		readRevision = -1;
 	}
 
 	@Override
 	public void onResume() {
 		super.onResume();
-		if (webView != null) webView.onResume();
+		if (webView != null) {
+			webView.onResume();
+			webView.post(this::readRecoveryDocument);
+		}
 	}
 
 	@Override
@@ -180,12 +314,27 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 				.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		menu.add(0, R.id.menu_copy_link, 0, R.string.copy_link);
 		menu.add(0, R.id.menu_share_link, 0, R.string.share_link);
+		if (isSoyjakSite()) {
+			menu.add(0, R.id.menu_soyjak_diagnostics, 0, R.string.soyjak_probe);
+		}
+		if (pendingRecovery() != null) {
+			menu.add(0, R.id.menu_soyjak_read_catalog, 0, R.string.soyjak_read_catalog);
+			menu.add(0, R.id.menu_soyjak_show_site, 0, R.string.soyjak_show_site);
+		}
 	}
 
 	@Override
 	public boolean onMenuItemSelected(MenuItem item) {
 		if (webView == null) return true;
-		if (item.getItemId() == R.id.menu_reload) {
+		if (item.getItemId() == R.id.menu_soyjak_read_catalog) {
+			readRevision = -1;
+			readRecoveryDocument();
+		} else if (item.getItemId() == R.id.menu_soyjak_show_site) {
+			cancelRecovery();
+			invalidateOptionsMenu();
+		} else if (item.getItemId() == R.id.menu_soyjak_diagnostics) {
+			SoyjakDiagnostics.probeAndShow(requireContext());
+		} else if (item.getItemId() == R.id.menu_reload) {
 			webView.reload();
 		} else if (item.getItemId() == R.id.menu_copy_link) {
 			StringUtils.copyToClipboard(requireContext(), webView.getUrl());
@@ -200,21 +349,27 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 
 	@Override
 	public boolean onHomePressed() {
+		cancelRecovery();
 		return false;
 	}
 
 	@Override
 	public boolean onBackPressed() {
+		if (pendingRecovery() != null) {
+			cancelRecovery();
+			return false;
+		}
 		if (webView != null && webView.canGoBack()) {
 			webView.goBack();
 			return true;
 		}
+		cancelRecovery();
 		return false;
 	}
 
 	@Override
 	public boolean canHandleBack() {
-		return webView != null && webView.canGoBack();
+		return pendingRecovery() == null && webView != null && webView.canGoBack();
 	}
 
 	@Override
@@ -233,7 +388,10 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
 			boolean current = webView == view;
 			ViewGroup parent = view.getParent() instanceof ViewGroup ? (ViewGroup) view.getParent() : null;
-			if (current) webView = null;
+			if (current) {
+				webView = null;
+				documentRevision++;
+			}
 			WebViewUtils.destroyAfterRendererGone(view, detail, "browser");
 			if (current) {
 				if (progressView != null) progressView.setProgress(100);
@@ -253,6 +411,8 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		}
 
 		private boolean handleUrlLoading(WebView view, Uri uri) {
+			Bundle arguments = getArguments();
+			if (arguments != null && arguments.getBoolean(EXTRA_SOYJAK_SITE) && SoyjakReaderPage.isSite(uri)) return false;
 			Chan chan = Chan.getPreferred(null, uri);
 			if (chan.name != null) {
 				ChanLocator.NavigationData navigationData;
@@ -288,8 +448,49 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 		}
 
 		@Override
+		public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+			if (view == webView) {
+				documentRevision++;
+				readyDocument = null;
+				loadingDocument = url;
+				mainFrameFailed = false;
+			}
+		}
+
+		private void mainFrameError(WebView view, WebResourceRequest request) {
+			if (view == webView && request.isForMainFrame() && request.getUrl().toString().equals(loadingDocument)) {
+				mainFrameFailed = true;
+				documentRevision++;
+				readyDocument = null;
+			}
+		}
+
+		@Override
+		public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+			mainFrameError(view, request);
+		}
+
+		@Override
+		public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+			mainFrameError(view, request);
+		}
+
+		@Override
 		public void onPageFinished(WebView view, String url) {
 			if (view != webView || !isAdded() || url == null) return;
+			if (SoyjakBrowserSession.storeCookies(url)) {
+				ClickableToast.show(R.string.soyjak_access_saved);
+			}
+			if (isSoyjakSite()) {
+				String pageTitle = view.getTitle();
+				SoyjakDiagnostics.event("webview_finished", "route=" + SoyjakDiagnostics.route(Uri.parse(url))
+						+ " challengeTitle=" + ("Just a moment...".equals(pageTitle)
+						|| "Attention Required! | Cloudflare".equals(pageTitle)));
+			}
+			if (!mainFrameFailed && url.equals(view.getUrl()) && (loadingDocument == null || url.equals(loadingDocument))) {
+				readyDocument = url;
+				readRecoveryDocument();
+			}
 			String title = view.getTitle();
 			((FragmentHandler) requireActivity()).setTitleSubtitle(StringUtils.isEmptyOrWhitespace(title)
 					? getString(R.string.web_browser) : title, null);

@@ -34,6 +34,7 @@ public final class ErrorItem implements Parcelable {
 		UNSUPPORTED_SERVICE,
 		INVALID_AUTHORIZATION_DATA,
 		UNSUPPORTED_RECAPTCHA,
+		BROWSER_CHALLENGE,
 		LOCAL_NETWORK_PERMISSION
 	}
 
@@ -164,6 +165,10 @@ public final class ErrorItem implements Parcelable {
 			}
 			case FIREWALL_BLOCK: {
 				resId = R.string.ddos_protection_bypass_failed;
+				break;
+			}
+			case BROWSER_CHALLENGE: {
+				resId = R.string.soyjak_browser_challenge;
 				break;
 			}
 			case LOCAL_NETWORK_PERMISSION: {

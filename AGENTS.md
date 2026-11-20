@@ -10,3 +10,11 @@ described in `CODEX.md`.
 
 Never switch modes automatically. Preserve existing user changes and treat
 this directory as the active Dashchan_2 checkout.
+
+## Android user interface
+
+Before changes to screens, dialogs, layout, UI resources, animations, or user-facing
+copy, read `docs/design/README.md`. Choose the existing component family, preserve
+the relevant opt-outs, and run `python tools/design/audit.py check --base HEAD`
+for local work (use the merge base for committed work). Report visual checks
+separately from static checks. These steps do not change the modes in CODEX.md.

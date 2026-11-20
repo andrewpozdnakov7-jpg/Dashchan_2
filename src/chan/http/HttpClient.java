@@ -8,6 +8,8 @@ import androidx.annotation.NonNull;
 import chan.content.Chan;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakDiagnostics;
+import com.mishiranu.dashchan.chan.soyjak.SoyjakHeadlessChallenge;
 import com.mishiranu.dashchan.content.AdvancedPreferences;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.Preferences;
@@ -407,6 +409,7 @@ public class HttpClient {
 		ProxyData previousAuthData = setProxyAuthentication(authData != null && session.proxy != null &&
 				session.proxy.equals(authData.getProxy()) ? authData : null);
 		Uri requestedUri = session.getCurrentRequestedUri();
+		boolean soyjakDiagnostics = "soyjak".equals(session.holder.chan.name);
 		try {
 			if (authData != null && authData.authInvalid) {
 				throw new HttpException(ErrorItem.Type.DOWNLOAD, false, false);
@@ -474,7 +477,20 @@ public class HttpClient {
 					? request.cookieBuilder : obtainModifiedCookieBuilder(request.cookieBuilder,
 					session.holder.chan, requestedUri, resolverIdentifier);
 			if (cookieBuilder != null) {
-				connection.setRequestProperty("Cookie", cookieBuilder.build());
+				String cookieHeader = cookieBuilder.build();
+				connection.setRequestProperty("Cookie", cookieHeader);
+				if (soyjakDiagnostics) {
+					SoyjakDiagnostics.event("native_request", "route=" + SoyjakDiagnostics.route(requestedUri)
+							+ " method=" + request.requestMethod.name()
+							+ " cookie=" + (cookieHeader.isEmpty() ? "none" : "present")
+							+ " cookieLen=" + cookieHeader.length()
+							+ " uaFp=" + SoyjakDiagnostics.fingerprint(userAgent)
+							+ " mayResolve=" + session.holder.mayResolveFirewallBlock);
+				}
+			} else if (soyjakDiagnostics) {
+				SoyjakDiagnostics.event("native_request", "route=" + SoyjakDiagnostics.route(requestedUri)
+						+ " method=" + request.requestMethod.name()
+						+ " cookie=none uaFp=" + SoyjakDiagnostics.fingerprint(userAgent));
 			}
 			HttpValidator validator = request.validator;
 			if (validator != null) {
@@ -526,11 +542,28 @@ public class HttpClient {
 			}
 			session.closeInput = true;
 			boolean challenge = "challenge".equalsIgnoreCase(connection.getHeaderField("CF-Mitigated"));
+			boolean soyjakChallenge = challenge && "soyjak".equals(session.holder.chan.name);
 			String contentType = connection.getHeaderField("Content-Type");
 			if (session.diagnostics != null) {
 				session.diagnostics.event("http_response status=" + responseCode + " encoding=" + Encoding.get(connection)
 						+ " cfChallenge=" + challenge
 						+ " contentType=" + NetworkDiagnostics.contentType(contentType));
+			}
+			if (soyjakDiagnostics) {
+				SoyjakDiagnostics.event("native_response", "route=" + SoyjakDiagnostics.route(requestedUri)
+						+ " status=" + responseCode
+						+ " cfMitigated=" + challenge
+						+ " type=" + NetworkDiagnostics.contentType(contentType)
+						+ " encoding=" + Encoding.get(connection));
+			}
+			if (soyjakChallenge && (!SoyjakHeadlessChallenge.ENABLED || SoyjakHeadlessChallenge.isSuppressed())) {
+				if (soyjakDiagnostics) {
+					SoyjakDiagnostics.event("challenge_branch", "reason=immediate headless="
+							+ SoyjakHeadlessChallenge.ENABLED
+							+ " suppressed=" + SoyjakHeadlessChallenge.isSuppressed());
+				}
+				session.disconnectAndClear();
+				throw new HttpException(ErrorItem.Type.BROWSER_CHALLENGE, true, false);
 			}
 			HttpValidator resultValidator = HttpValidator.obtain(connection);
 			String charsetName = extractCharsetName(contentType);
@@ -598,10 +631,10 @@ public class HttpClient {
 			if (session.holder.chan.name != null && session.mayCheckFirewallBlock &&
 					requestMethod != HttpRequest.RequestMethod.HEAD) {
 				FirewallResolver.CheckResult result;
+				boolean mayResolve = session.holder.mayResolveFirewallBlock;
 				try {
 					result = FirewallResolver.Implementation.getInstance().checkResponse(session.holder.chan,
-							requestedUri, session.holder, response, resolverIdentifier,
-							session.holder.mayResolveFirewallBlock);
+							requestedUri, session.holder, response, resolverIdentifier, mayResolve);
 				} catch (InterruptedException e) {
 					throw new InterruptedHttpException();
 				}
@@ -616,12 +649,34 @@ public class HttpClient {
 							session.setNextRequestedUri(redirectedUri);
 						}
 						session.holder.mayResolveFirewallBlock = false;
+						if (soyjakChallenge) SoyjakHeadlessChallenge.reset();
+						if (soyjakDiagnostics) {
+							SoyjakDiagnostics.event("firewall_retry", "route=" + SoyjakDiagnostics.route(requestedUri));
+						}
 						throw new RetryException();
 					} else {
 						session.disconnectAndClear();
+						if (soyjakChallenge) {
+							// Suppress only a resolution that was really attempted, so a background
+							// check that is not allowed to resolve does not block the foreground.
+							if (mayResolve) SoyjakHeadlessChallenge.suppress();
+							if (soyjakDiagnostics) {
+								SoyjakDiagnostics.event("challenge_branch", "reason=resolver_failed mayResolve="
+										+ mayResolve + " resolved=" + result.resolved);
+							}
+							throw new HttpException(ErrorItem.Type.BROWSER_CHALLENGE, true, false);
+						}
 						throw new HttpException(ErrorItem.Type.FIREWALL_BLOCK, true, false);
 					}
 				}
+			}
+
+			if (soyjakChallenge) {
+				if (soyjakDiagnostics) {
+					SoyjakDiagnostics.event("challenge_branch", "reason=resolver_absent");
+				}
+				session.disconnectAndClear();
+				throw new HttpException(ErrorItem.Type.BROWSER_CHALLENGE, true, false);
 			}
 
 			if (request.successOnly) {

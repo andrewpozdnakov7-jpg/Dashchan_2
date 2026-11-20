@@ -943,6 +943,12 @@ public class PagesDatabase {
 
 	public InsertResult insertNewPosts(@NonNull ThreadKey threadKey, @NonNull List<Post> posts, @NonNull Meta meta,
 			boolean temporary, boolean newThread, boolean partial, PostNumber lastKnownPostNumber) throws IOException {
+		return insertNewPosts(threadKey, posts, meta, temporary, newThread, partial, lastKnownPostNumber, false);
+	}
+
+	public InsertResult insertNewPosts(@NonNull ThreadKey threadKey, @NonNull List<Post> posts, @NonNull Meta meta,
+			boolean temporary, boolean newThread, boolean partial, PostNumber lastKnownPostNumber,
+			boolean preserveExisting) throws IOException {
 		Objects.requireNonNull(threadKey);
 		Objects.requireNonNull(posts);
 		Objects.requireNonNull(meta);
@@ -969,7 +975,7 @@ public class PagesDatabase {
 			database.beginTransaction();
 			try {
 				result = insertNewPostsLocked(threadKey, meta, temporary, newThread, partial,
-						serializedMap, userPosts, lastKnownPostNumber);
+						serializedMap, userPosts, lastKnownPostNumber, preserveExisting);
 				database.setTransactionSuccessful();
 			} finally {
 				database.endTransaction();
@@ -984,7 +990,7 @@ public class PagesDatabase {
 	private InsertResult insertNewPostsLocked(ThreadKey threadKey,
 			Meta meta, boolean temporary, boolean newThread, boolean partial,
 			HashMap<PostNumber, Serialized> serializedMap, Set<PostNumber> userPosts,
-			PostNumber lastKnownPostNumber) throws IOException {
+			PostNumber lastKnownPostNumber, boolean preserveExisting) throws IOException {
 		LongSparseArray<Void> deleted = null;
 		LongSparseArray<Void> restored = null;
 		int newCount = 0;
@@ -1009,7 +1015,13 @@ public class PagesDatabase {
 				PostNumber postNumber = new PostNumber(cursor.getInt(1), cursor.getInt(2));
 				int flags = cursor.getInt(3);
 				byte[] hash = cursor.getBlob(4);
-				Serialized serialized = serializedMap.get(postNumber);
+				Serialized serialized;
+				if (preserveExisting) {
+					serializedMap.remove(postNumber);
+					serialized = null;
+				} else {
+					serialized = serializedMap.get(postNumber);
+				}
 				if (serialized != null) {
 					if (Arrays.equals(serialized.hash, hash)) {
 						serializedMap.remove(postNumber);
@@ -1038,7 +1050,7 @@ public class PagesDatabase {
 						}
 						serialized.flags = flags;
 					}
-				} else if (!partial && !FlagUtils.get(flags, Schema.Posts.Flags.DELETED)) {
+				} else if (!partial && !preserveExisting && !FlagUtils.get(flags, Schema.Posts.Flags.DELETED)) {
 					if (deleted == null) {
 						deleted = new LongSparseArray<>();
 					}
@@ -1056,7 +1068,15 @@ public class PagesDatabase {
 		}
 
 		ArrayList<InsertResult.Reply> replies = new ArrayList<>();
-		upsertMeta(threadKey, temporary ? 0 : System.currentTimeMillis(), meta);
+		long touched = temporary ? 0 : System.currentTimeMillis();
+		int updated = 0;
+		if (preserveExisting) {
+			ContentValues values = new ContentValues();
+			values.put(Schema.Meta.Columns.TIME, touched);
+			Expression.Filter metaFilter = threadKey.filterMeta().build();
+			updated = database.update(Schema.Meta.TABLE_NAME, values, metaFilter.value, metaFilter.args);
+		}
+		if (updated == 0) upsertMeta(threadKey, touched, meta);
 		if (deleted != null) {
 			updateFlags(threadKey, Expression.LongIterator.create(deleted), "| " +
 					(Schema.Posts.Flags.DELETED | Schema.Posts.Flags.MARK_DELETED));

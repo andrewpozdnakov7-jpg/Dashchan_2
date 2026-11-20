@@ -1,0 +1,4 @@
+- Added experimental read-only support for Soyjak.party 🫘 (soyjak.st). Browse boards, threads and attachments, and translate posts.
+- When the floating thread button has a single action, it shows that action’s icon and runs it immediately.
+- Holding “Refresh thread” can reload the entire thread, erase it from the cache, or clear old or deleted posts. A full reload is the default.
+- The Compact dialogs and hints option now includes an updated auto-hide rule editor and PIN help. The editor makes it easier to set a rule’s scope and test an expression on sample text.

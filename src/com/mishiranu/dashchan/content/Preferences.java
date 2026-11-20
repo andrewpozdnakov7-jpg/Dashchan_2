@@ -2497,7 +2497,33 @@ public class Preferences {
 	public static final boolean DEFAULT_PERSISTENT_TRANSLATION_CACHE = false;
 	public static final String KEY_THREAD_FAB_MENU = "thread_fab_menu";
 	public static final boolean DEFAULT_THREAD_FAB_MENU = false;
+	public static final String KEY_THREAD_FAB_CUSTOM_ORDER = "thread_fab_custom_order";
 	private static final String KEY_THREAD_FAB_ORDER = "thread_fab_order";
+	public static final String KEY_THREAD_FAB_REFRESH_LONG_PRESS = "thread_fab_refresh_long_press";
+	public static final ThreadFabRefreshLongPress DEFAULT_THREAD_FAB_REFRESH_LONG_PRESS =
+			ThreadFabRefreshLongPress.RELOAD;
+
+	public enum ThreadFabRefreshLongPress {
+		RELOAD("reload", R.id.menu_reload, R.string.thread_fab_reload),
+		ERASE("erase", R.id.menu_erase, R.string.erase),
+		CLEAR_OLD("clear_old", R.id.menu_clear_old, R.string.clear_old),
+		CLEAR_DELETED("clear_deleted", R.id.menu_clear_deleted, R.string.clear_deleted);
+
+		public final String value;
+		public final int menuId;
+		public final int titleResId;
+
+		ThreadFabRefreshLongPress(String value, int menuId, int titleResId) {
+			this.value = value;
+			this.menuId = menuId;
+			this.titleResId = titleResId;
+		}
+	}
+
+	public static ThreadFabRefreshLongPress getThreadFabRefreshLongPress() {
+		return getEnumValue(KEY_THREAD_FAB_REFRESH_LONG_PRESS, ThreadFabRefreshLongPress.values(),
+				DEFAULT_THREAD_FAB_REFRESH_LONG_PRESS, option -> option.value);
+	}
 
 	public enum ThreadFabAction {
 		REPLY("reply", R.string.reply, true),
@@ -2521,8 +2547,13 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_THREAD_FAB_MENU, DEFAULT_THREAD_FAB_MENU);
 	}
 
+	public static boolean isThreadFabCustomOrderEnabled() {
+		return PREFERENCES.getBoolean(KEY_THREAD_FAB_CUSTOM_ORDER, PREFERENCES.contains(KEY_THREAD_FAB_ORDER));
+	}
+
 	public static List<ThreadFabAction> getThreadFabActionOrder() {
 		ThreadFabAction[] actions = ThreadFabAction.values();
+		if (!isThreadFabCustomOrderEnabled()) return new ArrayList<>(Arrays.asList(actions));
 		ArrayList<ThreadFabAction> order = new ArrayList<>(actions.length);
 		for (String key : PREFERENCES.getString(KEY_THREAD_FAB_ORDER, "").split(",")) {
 			for (ThreadFabAction action : actions) {
