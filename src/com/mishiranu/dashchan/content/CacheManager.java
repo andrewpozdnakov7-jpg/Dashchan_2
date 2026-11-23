@@ -41,7 +41,8 @@ public class CacheManager implements Runnable {
 
 	private CacheManager() {
 		if (MainApplication.getInstance().isMainProcess()) {
-			handleGalleryShareFiles();
+			removeExpiredShareFiles(getExternalTempDirectory());
+			removeExpiredShareFiles(FileProvider.getSharedAttachmentDirectory());
 			syncCache();
 			IntentFilter intentFilter = new IntentFilter(Intent.ACTION_MEDIA_MOUNTED);
 			intentFilter.addDataScheme("file");
@@ -675,8 +676,7 @@ public class CacheManager implements Runnable {
 
 	private static final String GALLERY_SHARE_FILE_NAME_START = FileProvider.GALLERY_SHARE_FILE_NAME_START;
 
-	private void handleGalleryShareFiles() {
-		File tempDirectory = getExternalTempDirectory();
+	private static void removeExpiredShareFiles(File tempDirectory) {
 		if (tempDirectory == null) {
 			return;
 		}
@@ -695,7 +695,18 @@ public class CacheManager implements Runnable {
 	}
 
 	public Pair<Uri, String> prepareFileForShare(File file, String fileName) {
-		File tempDirectory = getExternalTempDirectory();
+		return prepareFileForShare(file, fileName, getExternalTempDirectory(), false);
+	}
+
+	public Pair<Uri, String> prepareAttachmentForShare(File file, String fileName) {
+		File directory = FileProvider.getSharedAttachmentDirectory();
+		if (directory == null || !directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory()) {
+			return null;
+		}
+		return prepareFileForShare(file, fileName, directory, true);
+	}
+
+	private Pair<Uri, String> prepareFileForShare(File file, String fileName, File tempDirectory, boolean attachment) {
 		if (tempDirectory == null) {
 			return null;
 		}
@@ -705,13 +716,23 @@ public class CacheManager implements Runnable {
 			mimeType = "image/jpeg";
 			extension = "jpg";
 		}
-		handleGalleryShareFiles();
+		removeExpiredShareFiles(tempDirectory);
 		fileName = GALLERY_SHARE_FILE_NAME_START + java.util.UUID.randomUUID() + "." + extension;
 		File shareFile = new File(tempDirectory, fileName);
 		if (!ShareFileCopy.copy(file, shareFile)) {
 			return null;
 		}
-		Uri uri = FileProvider.convertShareFile(tempDirectory, shareFile, mimeType);
+		Uri uri;
+		try {
+			uri = attachment ? FileProvider.sharedAttachmentUri(shareFile)
+					: FileProvider.convertShareFile(tempDirectory, shareFile, mimeType);
+		} catch (IOException e) {
+			uri = null;
+		}
+		if (uri == null) {
+			shareFile.delete();
+			return null;
+		}
 		return new Pair<>(uri, mimeType);
 	}
 }

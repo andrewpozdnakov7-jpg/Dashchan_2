@@ -4,6 +4,7 @@ import android.content.Context;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import com.mishiranu.dashchan.content.Preferences;
 
 public class AudioFocus {
 	public enum Change {LOSS, LOSS_TRANSIENT, GAIN}
@@ -33,7 +34,7 @@ public class AudioFocus {
 	}
 
 	// A request follows the playing media, not the window. All operations use the main thread.
-	private static final class Session {
+	private static final class Session implements SharedPreferences.Listener {
 		final AudioManager audioManager;
 		final AudioFocusRequest request;
 		Callback callback;
@@ -71,18 +72,31 @@ public class AudioFocus {
 					.setOnAudioFocusChangeListener(listener).build();
 		}
 
+		@Override
+		public void onChanged(String key) {
+			if (Preferences.KEY_IGNORE_AUDIO_FOCUS.equals(key) && Preferences.isIgnoreAudioFocusEnabled()) {
+				release();
+			}
+		}
+
 		void release() {
 			if (acquired) {
 				acquired = false;
+				Preferences.PREFERENCES.unregister(this);
 				audioManager.abandonAudioFocusRequest(request);
 			}
 		}
 	}
 
 	public boolean acquire() {
+		if (Preferences.isIgnoreAudioFocusEnabled()) {
+			release();
+			return true;
+		}
 		if (session == null) session = new Session(audioManager, focusGain, callback);
 		if (!session.acquired && audioManager.requestAudioFocus(session.request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
 			session.acquired = true;
+			Preferences.PREFERENCES.register(session);
 			return true;
 		}
 		return session.acquired;
@@ -98,6 +112,7 @@ public class AudioFocus {
 	public void transferTo(AudioFocus target) {
 		if (target == this) return;
 		target.release();
+		if (Preferences.isIgnoreAudioFocusEnabled()) release();
 		target.session = session;
 		session = null;
 		if (target.session != null) target.session.callback = target.callback;

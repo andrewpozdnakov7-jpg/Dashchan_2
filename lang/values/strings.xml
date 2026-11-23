@@ -77,6 +77,13 @@
 	<string name="audio_playback">Audio playback</string>
 	<string name="audio_player">Audio player</string>
 	<string name="autohide">Autohide</string>
+	<string name="autohide_settings">Autohide settings</string>
+	<string name="autohide_mode">Hide mode</string>
+	<string name="autohide_mode__format">Hide mode · %1$s</string>
+	<string name="autohide_mode_inherit">Use default</string>
+	<string name="autohide_mode_collapse">Collapse</string>
+	<string name="autohide_mode_remove">Hide completely</string>
+	<string name="autohide_list_no_fields">no search fields selected</string>
 	<string name="autohide_scope">Hide in</string>
 	<string name="automatic_update_check">Automatic update checks</string>
 	<string name="available__plural">Available</string>
@@ -282,7 +289,7 @@
 	<string name="disabled">Disabled</string>
 	<string name="display_hidden_threads">Display hidden threads</string>
 	<string name="remove_hidden_threads">Fully remove hidden threads</string>
-	<string name="remove_hidden_threads__summary">Do not show even collapsed rows for hidden threads. Applies to manual hiding and autohide rules.</string>
+	<string name="remove_hidden_threads__summary">Applies to manually hidden threads and rules that use the default.</string>
 	<string name="display_post_icons">Display post icons</string>
 	<string name="display_post_icons__summary">Post icons may be available on some boards</string>
 	<string name="do_nothing">Do nothing</string>
@@ -309,11 +316,9 @@
 	<string name="no_more_threads">There are no more threads</string>
 	<string name="enabled">Enabled</string>
 	<string name="predictive_back_title">Predictive Back</string>
-	<string name="predictive_back_settings_summary">Back gesture previews and behavior in the posting form</string>
+	<string name="predictive_back_settings_summary">Back previews turn on automatically with Android gesture navigation.</string>
 	<string name="predictive_back_enable_system_gestures">Enable gesture navigation in Android settings</string>
 	<string name="predictive_back_requires_android">Available on Android 13 and newer</string>
-	<string name="enable_predictive_back">Enable Predictive Back</string>
-	<string name="enable_predictive_back__summary">Preview the previous screen during the Back gesture. Enabled automatically when gesture navigation is detected, unless you have already made a choice.</string>
 	<string name="posting_back_single_gesture">Close “New message” with one gesture</string>
 	<string name="posting_back_single_gesture_summary">Leave the form immediately, even with the keyboard open or text selected. When disabled, Back handles the keyboard and selection first.</string>
 	<string name="posting_back_single_gesture_requires_android">Available on Android 14 and newer</string>
@@ -423,6 +428,8 @@
 	<string name="delete_font_dialog_title">Delete font</string>
 	<string name="s24_ultra_oneui9_toolbar_fix">Fix for S24 Ultra OneUI 9</string>
 	<string name="s24_ultra_oneui9_toolbar_fix_summary">Use consistent sizes and spacing for refresh and menu buttons in the top bar.</string>
+	<string name="lenovo_tb320fc_keyboard_fix">Keyboard fix for Lenovo TB320FC</string>
+	<string name="lenovo_tb320fc_keyboard_fix_summary">Keeps the new reply form clear of the keyboard.</string>
 	<string name="video_diagnostics_begin">Start</string>
 	<string name="video_diagnostics_extended">Extended log</string>
 	<string name="video_diagnostics_saving">Saving diagnostics…</string>
@@ -622,6 +629,8 @@
 	<string name="play">Play</string>
 	<string name="play_after_scroll">Play after scroll</string>
 	<string name="play_after_scroll__summary">Hide play button before playing video</string>
+	<string name="ignore_audio_focus">Ignore audio focus</string>
+	<string name="ignore_audio_focus__summary">Play audio and video in Slooop while other apps are playing sound.</string>
 	<string name="start_videos_muted">Start videos muted</string>
 	<string name="remember_last_video_position">Remember last video position</string>
 	<string name="remember_last_video_position__summary">Resume the last video when you reopen it, even after restarting the app. Finished videos start from the beginning</string>
@@ -733,7 +742,7 @@
 	<string name="posts">Posts</string>
 	<string name="posts_list">Posts list</string>
 	<string name="remove_hidden_posts">Fully remove hidden posts</string>
-	<string name="remove_hidden_posts__summary">Do not show even collapsed rows for hidden posts. Applies to manual hiding, autohide rules, and the AI post filter.</string>
+	<string name="remove_hidden_posts__summary">Applies to manually hidden posts, rules that use the default, and the AI post filter.</string>
 	<string name="posts_sent">Posts sent</string>
 	<string name="posts_with_files__genitive">Posts with files</string>
 	<string name="posts_with_same_name">Posts with the same name</string>

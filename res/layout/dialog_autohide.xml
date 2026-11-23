@@ -118,6 +118,18 @@
 
 		</LinearLayout>
 
+		<TextView
+			android:id="@id/autohide_mode"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:minHeight="48dp"
+			android:gravity="center_vertical"
+			android:focusable="true"
+			android:background="?android:attr/selectableItemBackground"
+			android:textAppearance="?android:attr/textAppearanceListItem"
+			android:paddingStart="@dimen/dialog_padding_text"
+			android:paddingEnd="@dimen/dialog_padding_text" />
+
 		<com.mishiranu.dashchan.widget.SafePasteEditText
 			android:id="@+id/value"
 			android:layout_width="match_parent"

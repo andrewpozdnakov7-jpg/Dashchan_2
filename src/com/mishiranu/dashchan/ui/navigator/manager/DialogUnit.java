@@ -806,8 +806,8 @@ public class DialogUnit {
 			if (!referencesFrom.isEmpty()) {
 				boolean removeHiddenPosts = Preferences.isRemoveHiddenPosts();
 				for (PostItem replyPostItem : configurationSet.postsProvider) {
-					if (referencesFrom.contains(replyPostItem.getPostNumber()) && (!removeHiddenPosts ||
-							!configurationSet.postStateProvider.isHiddenResolve(replyPostItem))) {
+					if (referencesFrom.contains(replyPostItem.getPostNumber()) &&
+							!configurationSet.postStateProvider.isRemovedResolve(replyPostItem, removeHiddenPosts)) {
 						postItems.add(replyPostItem);
 					}
 				}

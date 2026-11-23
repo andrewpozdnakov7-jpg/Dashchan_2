@@ -335,18 +335,13 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 	private final UiManager.PostStateProvider postStateProvider = new UiManager.PostStateProvider() {
 		@Override
 		public boolean isHiddenResolve(PostItem postItem) {
-			if (postItem.getHideState() == PostItem.HideState.UNDEFINED) {
+			if (!hidePerformer.isResolved(postItem)) {
 				RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 				PostItem.HideState hideState = retainableExtra.hiddenPosts.get(postItem.getPostNumber());
 				if (hideState != PostItem.HideState.UNDEFINED) {
 					postItem.setHidden(hideState, null);
 				} else {
-					String hideReason = hidePerformer.checkHidden(getChan(), postItem);
-					if (hideReason != null) {
-						postItem.setHidden(PostItem.HideState.HIDDEN, hideReason);
-					} else {
-						postItem.setHidden(PostItem.HideState.SHOWN, null);
-					}
+					hidePerformer.resolve(getChan(), postItem);
 				}
 			}
 			return postItem.getHideState().hidden;
@@ -591,6 +586,10 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 			boolean extract = true;
 			if (retainableExtra.cache != null && retainableExtra.postItems.size() > 0) {
 				extract = false;
+				decodeThreadExtra();
+				if (adapter.setRemoveHiddenPosts(Preferences.isRemoveHiddenPosts())) {
+					updateImportantPostsFastScrollBarDecorationData();
+				}
 				onExtractPostsCompleteInternal(true, null);
 				String searchSubmitQuery = getInitSearch().submitQuery;
 				if (searchSubmitQuery == null) {
@@ -600,7 +599,6 @@ public class PostsPage extends ListPage implements PostsAdapter.Callback, Favori
 					setCustomSearchView(searchControlView);
 					updateSearchTitle();
 				}
-				decodeThreadExtra();
 				if (retainableExtra.dialogsState != null) {
 					uiManager.dialog().restoreState(adapter.getConfigurationSet(), retainableExtra.dialogsState);
 					retainableExtra.dialogsState.dropState();

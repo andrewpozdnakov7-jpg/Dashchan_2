@@ -53,6 +53,8 @@
 	<item type="id" name="menu_mark_replies_read" />
 	<item type="id" name="menu_my_posts" />
 	<item type="id" name="menu_new_rule" />
+	<item type="id" name="menu_autohide_settings" />
+	<item type="id" name="autohide_mode" />
 	<item type="id" name="menu_new_thread" />
 	<item type="id" name="menu_quick_filter" />
 	<item type="id" name="autohide_scope_original_post" />

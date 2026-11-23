@@ -5,11 +5,15 @@ import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.Layout;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextWatcher;
 import android.text.style.BackgroundColorSpan;
+import android.text.style.StyleSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -32,7 +36,9 @@ import chan.content.ChanManager;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.storage.AutohideStorage;
+import com.mishiranu.dashchan.content.storage.AutohideStorage.HideMode;
 import com.mishiranu.dashchan.ui.FragmentHandler;
+import com.mishiranu.dashchan.ui.InstanceDialog;
 import com.mishiranu.dashchan.util.AndroidUtils;
 import com.mishiranu.dashchan.util.ListViewUtils;
 import com.mishiranu.dashchan.util.ResourceUtils;
@@ -45,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.StringJoiner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -132,6 +139,7 @@ public class AutohideFragment extends BaseListFragment {
 				.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_IF_ROOM);
 		MenuItem searchMenuItem = menu.add(0, R.id.menu_search, 0, R.string.filter)
 				.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW);
+		menu.add(0, R.id.menu_autohide_settings, 2, R.string.preferences);
 		if (primary) {
 			this.searchMenuItem = searchMenuItem;
 			searchMenuItem.setActionView(searchView);
@@ -161,6 +169,7 @@ public class AutohideFragment extends BaseListFragment {
 	public void onPrepareOptionsMenu(Menu menu, boolean primary) {
 		menu.findItem(R.id.menu_new_rule).setVisible(searchQuery == null);
 		menu.findItem(R.id.menu_quick_filter).setVisible(searchQuery == null);
+		menu.findItem(R.id.menu_autohide_settings).setVisible(searchQuery == null);
 	}
 
 	@Override
@@ -170,6 +179,9 @@ public class AutohideFragment extends BaseListFragment {
 			return true;
 		} else if (item.getItemId() == R.id.menu_quick_filter) {
 			editQuickRule(null, -1);
+			return true;
+		} else if (item.getItemId() == R.id.menu_autohide_settings) {
+			((FragmentHandler) requireActivity()).pushFragment(new AutohideSettingsFragment());
 			return true;
 		} else if (item.getItemId() == R.id.menu_search) {
 			if (item == searchMenuItem) {
@@ -221,16 +233,13 @@ public class AutohideFragment extends BaseListFragment {
 	}
 
 	private void onQuickEditComplete(String value, int index) {
-		boolean optionOriginalPost = true;
-		boolean optionReplies = true;
-		if (index >= 0) {
-			AutohideStorage.AutohideItem oldItem = items.get(index);
-			optionOriginalPost = oldItem.optionOriginalPost;
-			optionReplies = oldItem.optionReplies;
-		}
+		AutohideStorage.AutohideItem oldItem = index >= 0 ? items.get(index) : null;
+		boolean optionOriginalPost = oldItem == null || oldItem.optionOriginalPost;
+		boolean optionReplies = oldItem == null || oldItem.optionReplies;
 		AutohideStorage.AutohideItem autohideItem = new AutohideStorage.AutohideItem(null, null, null,
 				optionOriginalPost, optionReplies, false, true, true, false, false,
 				AutohideStorage.AutohideItem.MatchMode.LITERAL, value);
+		if (oldItem != null) autohideItem.hideMode = oldItem.hideMode;
 		onEditComplete(autohideItem, index);
 	}
 
@@ -343,81 +352,7 @@ public class AutohideFragment extends BaseListFragment {
 			((com.mishiranu.dashchan.widget.ScopeCheckBox) ruleHolder.replies).refreshAppearance();
 			viewHolder.text1.setText(StringUtils.isEmpty(autohideItem.value)
 					? getString(R.string.all_posts) : autohideItem.value);
-			StringBuilder builder = new StringBuilder();
-			boolean and = false;
-			if (!StringUtils.isEmpty(autohideItem.boardName) || autohideItem.optionSage) {
-				if (!StringUtils.isEmpty(autohideItem.boardName)) {
-					if (and) {
-						builder.append(" & ");
-					}
-					builder.append('[').append(autohideItem.boardName).append(']');
-					if (!StringUtils.isEmpty(autohideItem.threadNumber)) {
-						builder.append(" & ").append(autohideItem.threadNumber);
-					}
-					and = true;
-				}
-				if (autohideItem.optionSage) {
-					if (and) {
-						builder.append(" & ");
-					}
-					builder.append("sage");
-					and = true;
-				}
-			}
-			int orCount = 0;
-			if (autohideItem.optionSubject) {
-				orCount++;
-			}
-			if (autohideItem.optionComment) {
-				orCount++;
-			}
-			if (autohideItem.optionName) {
-				orCount++;
-			}
-			if (autohideItem.optionFileName) {
-				orCount++;
-			}
-			if (orCount > 0) {
-				if (and) {
-					builder.append(" & ");
-					if (orCount > 1) {
-						builder.append('(');
-					}
-				}
-				boolean or = false;
-				if (autohideItem.optionSubject) {
-					builder.append("subject");
-					or = true;
-				}
-				if (autohideItem.optionComment) {
-					if (or) {
-						builder.append(" | ");
-					}
-					builder.append("comment");
-					or = true;
-				}
-				if (autohideItem.optionName) {
-					if (or) {
-						builder.append(" | ");
-					}
-					builder.append("name");
-				}
-				if (autohideItem.optionFileName) {
-					if (or) {
-						builder.append(" | ");
-					}
-					builder.append("file");
-				}
-				if (and && orCount > 1) {
-					builder.append(')');
-				}
-			} else {
-				if (and) {
-					builder.append(" & ");
-				}
-				builder.append("false");
-			}
-			viewHolder.text2.setText(builder);
+			viewHolder.text2.setText(ruleSummary(holder.itemView.getContext(), autohideItem));
 			InterfaceAppearance.serviceRow(holder.itemView, viewHolder.text1, viewHolder.text2, null);
 		}
 
@@ -454,6 +389,30 @@ public class AutohideFragment extends BaseListFragment {
 			holder.originalPost.setState(items.size(), originalPostCount);
 			holder.replies.setState(items.size(), repliesCount);
 		}
+	}
+
+	/** Show the saved per-rule action first, even when the scope controls leave little room. */
+	private static CharSequence ruleSummary(Context context, AutohideStorage.AutohideItem item) {
+		SpannableStringBuilder summary = new SpannableStringBuilder(context.getText(hideModeTitle(item.hideMode)));
+		if (item.hideMode != HideMode.INHERIT) {
+			summary.setSpan(new StyleSpan(Typeface.BOLD), 0, summary.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+		}
+		StringJoiner fields = new StringJoiner(", ");
+		if (item.optionSubject) fields.add(context.getText(R.string.subject));
+		if (item.optionComment) fields.add(context.getText(R.string.comment));
+		if (item.optionName) fields.add(context.getText(R.string.name));
+		if (item.optionFileName) fields.add(context.getText(R.string.rule_filename));
+		summary.append(" · ");
+		if (fields.length() == 0) {
+			summary.append(context.getText(R.string.autohide_list_no_fields));
+		} else {
+			Locale locale = context.getResources().getConfiguration().getLocales().get(0);
+			summary.append(fields.toString().toLowerCase(locale));
+		}
+		if (!StringUtils.isEmpty(item.boardName)) summary.append(" · /").append(item.boardName).append('/');
+		if (!StringUtils.isEmpty(item.threadNumber)) summary.append(" · №").append(item.threadNumber);
+		if (item.optionSage) summary.append(" · ").append(context.getText(R.string.rule_sage));
+		return summary;
 	}
 
 	private static class RuleViewHolder extends RecyclerView.ViewHolder {
@@ -576,6 +535,45 @@ public class AutohideFragment extends BaseListFragment {
 		return (int) (value * ResourceUtils.obtainDensity(context) + 0.5f);
 	}
 
+	private static final HideMode[] HIDE_MODE_CHOICES = {HideMode.INHERIT, HideMode.COLLAPSE, HideMode.REMOVE};
+
+	private static int hideModeTitle(HideMode mode) {
+		return switch (mode) {
+			case INHERIT -> R.string.autohide_mode_inherit;
+			case COLLAPSE -> R.string.autohide_mode_collapse;
+			case REMOVE -> R.string.autohide_mode_remove;
+		};
+	}
+
+	private static void bindHideModeSelector(AutohideDialog editor, View selector) {
+		selector.setOnClickListener(v -> new InstanceDialog(editor.getChildFragmentManager(), "hideMode", provider -> {
+			AutohideDialog owner = (AutohideDialog) provider.getParentFragment();
+			Context context = provider.getContext();
+			CharSequence[] titles = new CharSequence[HIDE_MODE_CHOICES.length];
+			int selected = 0;
+			for (int i = 0; i < HIDE_MODE_CHOICES.length; i++) {
+				HideMode mode = HIDE_MODE_CHOICES[i];
+				titles[i] = context.getText(hideModeTitle(mode));
+				if (mode == owner.hideMode) selected = i;
+			}
+			AlertDialog picker = MotionDialogBuilder.standard(context)
+					.setTitle(R.string.autohide_mode)
+					.setSingleChoiceItems(titles, selected, (dialog, which) -> {
+						owner.setHideMode(HIDE_MODE_CHOICES[which]);
+						dialog.dismiss();
+					})
+					.setNegativeButton(android.R.string.cancel, null)
+					.create();
+			com.mishiranu.dashchan.content.security.AppSecurity.protectDialog(picker);
+			return picker;
+		}));
+	}
+
+	private static void showHideMode(TextView selector, HideMode mode) {
+		Context context = selector.getContext();
+		selector.setText(context.getString(R.string.autohide_mode__format, context.getText(hideModeTitle(mode))));
+	}
+
 	public static class QuickAutohideDialog extends DialogFragment {
 		private static final String EXTRA_ITEM = "item";
 		private static final String EXTRA_INDEX = "index";
@@ -599,13 +597,11 @@ public class AutohideFragment extends BaseListFragment {
 			super.onCreate(savedInstanceState);
 			dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_quick_autohide, null);
 			valueEdit = dialogView.findViewById(R.id.quick_filter_value);
+			AutohideStorage.AutohideItem autohideItem = AndroidUtils.getParcelable(requireArguments(),
+					EXTRA_ITEM, AutohideStorage.AutohideItem.class);
 			String value = savedInstanceState != null ? savedInstanceState.getString(EXTRA_VALUE) : null;
-			if (value == null) {
-				AutohideStorage.AutohideItem autohideItem = AndroidUtils.getParcelable(requireArguments(),
-						EXTRA_ITEM, AutohideStorage.AutohideItem.class);
-				if (autohideItem != null) {
-					value = autohideItem.value;
-				}
+			if (value == null && autohideItem != null) {
+				value = autohideItem.value;
 			}
 			valueEdit.setText(value);
 			valueEdit.setSelection(valueEdit.length());
@@ -665,6 +661,7 @@ public class AutohideFragment extends BaseListFragment {
 
 		private ScrollView scrollView;
 		private TextView chanNameSelector;
+		private HideMode hideMode;
 		private EditText boardNameEdit;
 		private EditText threadNumberEdit;
 		private android.widget.CompoundButton autohideOriginalPost;
@@ -701,6 +698,7 @@ public class AutohideFragment extends BaseListFragment {
 					.inflate(R.layout.dialog_autohide, null);
 			scrollView = view;
 			chanNameSelector = view.findViewById(R.id.chan_name);
+			bindHideModeSelector(this, view.findViewById(R.id.autohide_mode));
 			boardNameEdit = view.findViewById(R.id.board_name);
 			threadNumberEdit = view.findViewById(R.id.thread_number);
 			autohideOriginalPost = view.findViewById(R.id.autohide_original_post);
@@ -730,6 +728,7 @@ public class AutohideFragment extends BaseListFragment {
 				autohideItem = AndroidUtils.getParcelable(requireArguments(), EXTRA_ITEM,
 						AutohideStorage.AutohideItem.class);
 			}
+			setHideMode(autohideItem != null ? autohideItem.hideMode : HideMode.INHERIT);
 			if (autohideItem != null) {
 				if (autohideItem.chanNames != null) {
 					selectedChanNames.addAll(autohideItem.chanNames);
@@ -775,6 +774,12 @@ public class AutohideFragment extends BaseListFragment {
 				page.onTestVisibilityChanged = this::updateTestResult;
 			} else InterfaceAppearance.standardAutohideContent(scrollView, false);
 			updateTestResult();
+		}
+
+		private void setHideMode(HideMode mode) {
+			hideMode = mode;
+			if (page != null) page.setHideModeLabel(hideModeTitle(mode));
+			else showHideMode(scrollView.findViewById(R.id.autohide_mode), mode);
 		}
 
 		@Override
@@ -878,10 +883,13 @@ public class AutohideFragment extends BaseListFragment {
 			boolean optionName = autohideName.isChecked();
 			boolean optionFileName = autohideFileName.isChecked();
 			String value = valueEdit.getText().toString();
-			return new AutohideStorage.AutohideItem(selectedChanNames.size() > 0 ? selectedChanNames : null,
+			AutohideStorage.AutohideItem item = new AutohideStorage.AutohideItem(
+					selectedChanNames.size() > 0 ? selectedChanNames : null,
 					boardName, threadNumber, optionOriginalPost, optionReplies, optionSage,
 					optionSubject, optionComment, optionName, optionFileName,
 					AutohideStorage.AutohideItem.MatchMode.REGEX, value);
+			item.hideMode = hideMode;
+			return item;
 		}
 
 		@Override

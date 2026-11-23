@@ -15,6 +15,11 @@ public final class EditorHeightPolicy {
 				- Math.max(0, topInset) - Math.max(0, editorChromeAndBottomInset));
 	}
 
+	/** The part of the measured content still covered by a docked keyboard. */
+	public static int keyboardOverlap(int contentTop, int contentBottom, int keyboardTop) {
+		return Math.max(0, contentBottom - Math.max(contentTop, keyboardTop));
+	}
+
 	public static int clampLines(int lines) {
 		return Math.max(MIN_LINES, Math.min(MAX_LINES, lines));
 	}

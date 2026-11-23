@@ -360,14 +360,13 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 	private final UiManager.PostStateProvider postStateProvider = new UiManager.PostStateProvider() {
 		@Override
 		public boolean isHiddenResolve(PostItem postItem) {
-			if (postItem.getHideState() == PostItem.HideState.UNDEFINED) {
+			if (!hidePerformer.isResolved(postItem)) {
 				PostItem.HideState hideState = getRetainableExtra(RetainableExtra.FACTORY).hiddenThreads
 						.get(makeThreadKey(postItem));
 				if (hideState != PostItem.HideState.UNDEFINED) {
 					postItem.setHidden(hideState, null);
 				} else {
-					String reason = hidePerformer.checkHidden(Chan.get(postItem.getChanName()), postItem);
-					postItem.setHidden(reason != null ? PostItem.HideState.HIDDEN : PostItem.HideState.SHOWN, reason);
+					hidePerformer.resolve(Chan.get(postItem.getChanName()), postItem);
 				}
 			}
 			return postItem.getHideState().hidden;
@@ -475,7 +474,14 @@ public class CombinedThreadsPage extends ListPage implements ThreadsAdapter.Call
 		pageActive = true;
 		getRecyclerView().getPullable().setPullSides(Preferences.isThreadPagePreloadEnabled()
 				? PullableWrapper.Side.BOTH : PullableWrapper.Side.TOP);
-		if (getRecyclerView().getAdapter() != null) getAdapter().setSearchActive(true);
+		if (getRecyclerView().getAdapter() != null) {
+			ThreadsAdapter adapter = getAdapter();
+			RetainableExtra extra = getRetainableExtra(RetainableExtra.FACTORY);
+			if (adapter.hasHideFilterChanged() && !extra.cachedPostItems.isEmpty()) {
+				adapter.setItems(Collections.singleton(extra.cachedPostItems), false);
+			}
+			adapter.setSearchActive(true);
+		}
 		if (feed != null && getRecyclerView().getAdapter() != null &&
 				!makeSourceSignature(feed).equals(getRetainableExtra(RetainableExtra.FACTORY).sourceSignature)) {
 			refresh(!getAdapter().isRealEmpty());

@@ -7,7 +7,8 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.test.core.app.ActivityScenario;
-import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
+import com.mishiranu.dashchan.util.SystemNavigationModeFixture;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.function.BooleanSupplier;
@@ -29,14 +30,14 @@ public class WebHistoryPreviewTest {
 		int starts;
 		boolean allowReady = true;
 		final java.util.concurrent.atomic.AtomicInteger responses = new java.util.concurrent.atomic.AtomicInteger();
-		Object old;
+		SystemNavigationMode.Mode old;
 		Fixture() { this(false); }
 		Fixture(boolean patterned) {
 			Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33);
 			activity = ActivityScenario.launch(StandardContentTestActivity.class);
 			activity.onActivity(a -> {
-				old = Preferences.PREFERENCES.getAll().get(Preferences.KEY_PREDICTIVE_BACK);
-				Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, true).close();
+				old = SystemNavigationMode.get();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				web = new Browser(a); a.setContentView(web); preview = new WebHistoryPreview(web, () -> true);
 				web.setWebViewClient(new WebViewClient() {
 					@Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -88,8 +89,7 @@ public class WebHistoryPreviewTest {
 		@Override public void close() {
 			main(() -> {
 				preview.close(); web.stopLoading(); web.destroy();
-				if (old instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, (Boolean) old).close();
-				else Preferences.PREFERENCES.edit().remove(Preferences.KEY_PREDICTIVE_BACK).close();
+				SystemNavigationModeFixture.setMode(old);
 			}); activity.close();
 		}
 	}

@@ -288,6 +288,21 @@ public abstract class PreferenceFragment extends ContentFragment {
 		return addCategory(getString(titleResId), ContextCompat.getDrawable(requireContext(), iconResId));
 	}
 
+	/** Home index only. All other categories and the classic design keep the original binder. */
+	protected final Preference<Void> addSettingsIndexCategory(int titleResId, int classicIcon, int materialIcon) {
+		Context context = requireContext();
+		if (!InterfaceAppearance.isEnabled(context)) return addCategory(titleResId, classicIcon);
+		CategoryPreference preference = new CategoryPreference(context, getString(titleResId),
+				ContextCompat.getDrawable(context, materialIcon)) {
+			@Override public void bindViewHolder(ViewHolder holder) {
+				super.bindViewHolder(holder);
+				InterfaceAppearance.settingsIndexIcon(((IconViewHolder) holder).icon);
+			}
+		};
+		addPreference(preference, false);
+		return preference;
+	}
+
 	public Preference<Void> addCategory(CharSequence title, Drawable icon) {
 		Preference<Void> preference = new CategoryPreference(requireContext(), title, icon);
 		addPreference(preference, false);

@@ -66,6 +66,8 @@ public class VideoPlayerSettingsFragment extends PreferenceFragment {
 		addCheck(true, Preferences.KEY_VIDEO_START_MUTED, Preferences.DEFAULT_VIDEO_START_MUTED,
 				R.string.start_videos_muted, R.string.start_videos_muted__summary)
 				.setEnabled(playerLoadResult.first);
+		addCheck(true, Preferences.KEY_IGNORE_AUDIO_FOCUS, Preferences.DEFAULT_IGNORE_AUDIO_FOCUS,
+				R.string.ignore_audio_focus, R.string.ignore_audio_focus__summary);
 		CheckPreference audioBoostPreference = addCheck(true, Preferences.KEY_VIDEO_AUDIO_BOOST,
 				Preferences.DEFAULT_VIDEO_AUDIO_BOOST, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary);

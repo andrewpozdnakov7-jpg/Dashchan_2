@@ -5,7 +5,8 @@ import android.view.View;
 import android.widget.TextView;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.platform.app.InstrumentationRegistry;
-import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
+import com.mishiranu.dashchan.util.SystemNavigationModeFixture;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import org.junit.Test;
@@ -55,10 +56,10 @@ public class DialogHistoryPreviewTest {
 		}
 	}
 	private static void fixture(boolean commit) {
-		Object old = Preferences.PREFERENCES.getAll().get(Preferences.KEY_PREDICTIVE_BACK);
+		SystemNavigationMode.Mode old = SystemNavigationMode.get();
 		DialogStack<Provider>[] stack = new DialogStack[1]; Provider provider = new Provider();
 		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
-			scenario.onActivity(a -> { Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, true).close();
+			scenario.onActivity(a -> { SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				stack[0] = new DialogStack<>(a); stack[0].push(provider); });
 			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 			scenario.onActivity(a -> provider.advance());
@@ -83,8 +84,7 @@ public class DialogHistoryPreviewTest {
 		} finally {
 			InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 				if (stack[0] != null) stack[0].clear();
-				if (old instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, (Boolean) old).close();
-				else Preferences.PREFERENCES.edit().remove(Preferences.KEY_PREDICTIVE_BACK).close();
+				SystemNavigationModeFixture.setMode(old);
 			});
 		}
 	}

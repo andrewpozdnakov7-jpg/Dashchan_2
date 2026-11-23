@@ -44,12 +44,15 @@ public class GalleryDialog extends com.mishiranu.dashchan.content.security.Secur
 	private ActionMode currentActionMode;
 	private boolean backInvocationHandled;
 	private final SharedPreferences.Listener motionPreferencesListener = this::onMotionPreferenceChanged;
-	private final Runnable navigationModeChanged = () -> onMotionPreferenceChanged(Preferences.KEY_PREDICTIVE_BACK);
+	private final Runnable navigationModeChanged = this::refreshPredictiveBack;
 	private void onMotionPreferenceChanged(String key) {
-		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
-			fragment.onPredictiveBackSettingsChanged();
-			unregisterPredictiveBackCallback(); registerPredictiveBackCallback();
-		}
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) refreshPredictiveBack();
+	}
+
+	private void refreshPredictiveBack() {
+		fragment.onPredictiveBackSettingsChanged();
+		unregisterPredictiveBackCallback();
+		registerPredictiveBackCallback();
 	}
 
 	boolean hasLocalBackAction() {

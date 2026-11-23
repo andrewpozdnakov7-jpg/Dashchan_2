@@ -19,6 +19,8 @@ import com.mishiranu.dashchan.content.async.CatalogSearch;
 import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
+import com.mishiranu.dashchan.content.storage.AutohideStorage;
+import com.mishiranu.dashchan.content.storage.AutohideStorage.HideMode;
 import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.SecretAbuThread;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
@@ -78,6 +80,8 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	private ArrayList<PostItem> catalogSortedPostItems;
 	private ArrayList<PostItem> filteredPostItems;
 	private boolean catalog;
+	private long hideRulesRevision = -1;
+	private boolean removeHiddenThreads;
 	private boolean threadsSortingEnabled;
 	private boolean ratingSortingEnabled;
 
@@ -366,9 +370,12 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public void setItems(Collection<List<PostItem>> postItemsCollection, boolean catalog, boolean refreshRetained) {
 		List<AdapterListUpdate.Row> before = captureRows();
+		hideRulesRevision = AutohideStorage.getInstance().getRevision();
+		removeHiddenThreads = Preferences.isRemoveHiddenThreads();
+		boolean mayRemove = mayRemoveHiddenThreads();
 		postItems.clear();
 		for (List<PostItem> postItems : postItemsCollection) {
-			appendItemsInternal(postItems);
+			appendItemsInternal(postItems, removeHiddenThreads, mayRemove);
 		}
 		this.catalog = catalog;
 		if (!swipeCellReplacements.isEmpty()) {
@@ -384,7 +391,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
 	public void appendItems(List<PostItem> postItems) {
 		List<AdapterListUpdate.Row> before = captureRows();
-		appendItemsInternal(postItems);
+		appendItemsInternal(postItems, Preferences.isRemoveHiddenThreads(), mayRemoveHiddenThreads());
 		applyCurrentSortingAndFilter(true, true);
 		dispatchRows(before, false, "append");
 	}
@@ -455,11 +462,19 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 		notifyDataSetChanged();
 	}
 
-	private void appendItemsInternal(List<PostItem> postItems) {
-		boolean displayHidden = Preferences.isDisplayHiddenThreads();
+	public boolean hasHideFilterChanged() {
+		return hideRulesRevision != AutohideStorage.getInstance().getRevision()
+				|| removeHiddenThreads != Preferences.isRemoveHiddenThreads();
+	}
+
+	public static boolean mayRemoveHiddenThreads() {
+		return Preferences.isRemoveHiddenThreads() || AutohideStorage.getInstance().getStrongestMode(true) == HideMode.REMOVE;
+	}
+
+	private void appendItemsInternal(List<PostItem> postItems, boolean removeByDefault, boolean mayRemove) {
 		if (postItems != null) {
 			for (PostItem postItem : postItems) {
-				if (displayHidden || !configurationSet.postStateProvider.isHiddenResolve(postItem)) {
+				if (!mayRemove || !configurationSet.postStateProvider.isRemovedResolve(postItem, removeByDefault)) {
 					this.postItems.add(postItem);
 				}
 			}
@@ -596,7 +611,7 @@ public class ThreadsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 	public void notifyThreadHidden(PostItem postItem) {
 		int position = getPostItems().indexOf(postItem);
 		if (position >= 0) position += getSecretAbuOffset();
-		if (Preferences.isDisplayHiddenThreads()) {
+		if (!configurationSet.postStateProvider.isRemovedResolve(postItem, Preferences.isRemoveHiddenThreads())) {
 			updateFastScrollGeometry();
 			if (position >= 0) notifyItemChanged(position);
 		} else {

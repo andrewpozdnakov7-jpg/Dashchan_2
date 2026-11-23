@@ -10,29 +10,33 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.preference.SettingsSearchIndex;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
+import com.mishiranu.dashchan.util.SystemNavigationModeFixture;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /** Flavor and restored-preference policy. Does not navigate or change the system animation scale. */
 @RunWith(AndroidJUnit4.class)
 public class InterfaceMotionDistributionTest {
-	@Test public void predictiveSwitchIsIndependentOfDesignAndRespectsTheDistribution() {
+	@Test public void predictiveBackFollowsSystemNavigationAndIgnoresTheOldSwitch() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-			String[] keys = {Preferences.KEY_NEW_INTERFACE_MOTION, Preferences.KEY_PREDICTIVE_BACK};
+			String[] keys = {Preferences.KEY_NEW_INTERFACE_MOTION, "predictive_back"};
+			SystemNavigationMode.Mode previousMode = SystemNavigationMode.get();
 			java.util.Map<String, ?> before = Preferences.PREFERENCES.getAll();
 			try {
 				for (boolean design : new boolean[]{false, true}) {
 					for (boolean predictive : new boolean[]{false, true}) {
 						Preferences.PREFERENCES.edit().put(keys[0], design).put(keys[1], predictive).close();
-						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && predictive, Preferences.isPredictiveBackEnabled());
-						assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && Build.VERSION.SDK_INT >= 33 && predictive
-								&& com.mishiranu.dashchan.util.SystemNavigationMode.get()
-										!= com.mishiranu.dashchan.util.SystemNavigationMode.Mode.BUTTONS,
-								InterfaceMotion.isPredictiveBackEnabled());
+						for (SystemNavigationMode.Mode mode : SystemNavigationMode.Mode.values()) {
+							SystemNavigationModeFixture.setMode(mode);
+							assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK && Build.VERSION.SDK_INT >= 33
+									&& mode == SystemNavigationMode.Mode.GESTURES, InterfaceMotion.isPredictiveBackEnabled());
+						}
 						assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION && design, InterfaceMotion.isEnabled());
 					}
 				}
 			} finally {
+				SystemNavigationModeFixture.setMode(previousMode);
 				try (SharedPreferences.Editor editor = Preferences.PREFERENCES.edit()) {
 					for (String key : keys) {
 						Object value = before.get(key);
@@ -69,17 +73,20 @@ public class InterfaceMotionDistributionTest {
 		});
 	}
 
-	@Test public void searchOffersSharedDesignAndOnlyAvailablePredictiveBack() {
+	@Test public void searchOffersSharedDesignAndGestureSettings() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 			int matches = 0;
 			int predictiveMatches = 0;
+			int postingMatches = 0;
 			for (SettingsSearchIndex.Entry entry : SettingsSearchIndex.create(context)) {
 				if (context.getString(R.string.material3_enable_design).equals(entry.getTitle())) matches++;
-				if (context.getString(R.string.enable_predictive_back).equals(entry.getTitle())) predictiveMatches++;
+				if (context.getString(R.string.predictive_back_title).equals(entry.getTitle())) predictiveMatches++;
+				if (context.getString(R.string.posting_back_single_gesture).equals(entry.getTitle())) postingMatches++;
 			}
 			assertEquals(BuildConfig.ENABLE_EXPERIMENTAL_INTERFACE_MOTION ? 1 : 0, matches);
 			assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK ? 1 : 0, predictiveMatches);
+			assertEquals(BuildConfig.ENABLE_PREDICTIVE_BACK ? 1 : 0, postingMatches);
 		});
 	}
 }

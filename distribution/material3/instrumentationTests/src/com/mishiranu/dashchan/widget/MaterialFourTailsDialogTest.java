@@ -31,7 +31,7 @@ public class MaterialFourTailsDialogTest {
 				MessageDialog.Builder builder = new MessageDialog.Builder(context).setMessage("Fixture");
 				if ((mask & 1) != 0) builder.setPositiveButton(android.R.string.ok, null);
 				if ((mask & 2) != 0) builder.setNegativeButton(android.R.string.cancel, null);
-				if ((mask & 4) != 0) builder.setNeutralButton(com.mishiranu.dashchan.R.string.predictive_back_keep_old_interface, null);
+				if ((mask & 4) != 0) builder.setNeutralButton(com.mishiranu.dashchan.R.string.preferences, null);
 				MessageDialog dialog = builder.create();
 				InterfaceAppearance.refreshTree(dialog.getWindow().getDecorView());
 				assertEquals((mask & 1) != 0, dialog.findViewById(android.R.id.button1) != null);
@@ -56,7 +56,7 @@ public class MaterialFourTailsDialogTest {
 						MessageDialog dialog = new MessageDialog.Builder(context).setTitle(hasTitle ? "Fixture" : null)
 								.setMessage(message).setPositiveButton(android.R.string.ok, null)
 								.setNegativeButton(android.R.string.cancel, null)
-								.setNeutralButton(com.mishiranu.dashchan.R.string.predictive_back_keep_old_interface, null).create();
+								.setNeutralButton(com.mishiranu.dashchan.R.string.preferences, null).create();
 						try {
 							TextView body = dialog.findViewById(android.R.id.message);
 							MessageDialog.Content content = (MessageDialog.Content) body.getParent().getParent();
@@ -108,7 +108,7 @@ public class MaterialFourTailsDialogTest {
 			});
 		}
 	}
-	@Test public void compactConfirmationKeepsCancelAndEnableTogetherWhenTheyFit() {
+	@Test public void compactConfirmationKeepsPrimaryAndCancelTogetherWhenTheyFit() {
 		InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
 			for (boolean enabled : new boolean[]{false, true}) StandardCustomContentTest.profile(enabled, () -> {
 				for (float scale : new float[]{1, 2}) {
@@ -117,11 +117,11 @@ public class MaterialFourTailsDialogTest {
 					Context context = PostingTestContext.create(base.createConfigurationContext(config));
 					for (int direction : new int[]{View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
 						MessageDialog dialog = new MessageDialog.Builder(context).setCompactActions(true)
-								.setTitle(com.mishiranu.dashchan.R.string.predictive_back_enable_title)
-								.setMessage(com.mishiranu.dashchan.R.string.predictive_back_enable_design_message)
-								.setNeutralButton(com.mishiranu.dashchan.R.string.predictive_back_keep_old_interface, null)
+								.setTitle("Enable new options?")
+								.setMessage("You can change these options in settings.")
+								.setNeutralButton(com.mishiranu.dashchan.R.string.material3_design_settings, null)
 								.setNegativeButton(android.R.string.cancel, null)
-								.setPositiveButton(com.mishiranu.dashchan.R.string.predictive_back_enable, null).create();
+								.setPositiveButton(com.mishiranu.dashchan.R.string.material3_enable_design, null).create();
 						try {
 							TextView body = dialog.findViewById(android.R.id.message);
 							MessageDialog.Content content = (MessageDialog.Content) body.getParent().getParent();

@@ -6,6 +6,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.text.InputType;
 import android.view.ContextThemeWrapper;
@@ -32,7 +33,8 @@ public final class RuleEditorPage {
     private final boolean dark;
     private final AppearanceColors colors;
     private final LinearLayout root, body, scopeBox, testBox;
-    private final TextView sections;
+    private final TextView sections, hideModeValue;
+    private final LinearLayout hideModeField;
     private final ImageView scopeButton, testButton;
     public final ScrollView scroll;
     public final Button save;
@@ -76,7 +78,8 @@ public final class RuleEditorPage {
         AppearanceTypography.apply(sage, AppearanceTypography.Role.BODY_LARGE);
         sage.setButtonTintList(states(InterfaceAppearance.contrasting(colors.primary, colors.surface, 3), colors.outline));
         sage.setMinHeight(dp(48)); sage.setTextColor(colors.onSurface); body.addView(sage, MATCH, WRAP);
-        divider();
+        hideModeValue = text(0, AppearanceTypography.Role.TITLE_MEDIUM);
+        hideModeField = addHideModeField(hideModeValue);
         LinearLayout scopeHead = column(); scopeHead.setMinimumHeight(dp(64)); scopeHead.setGravity(Gravity.CENTER_VERTICAL);
         ViewUtils.setSelectableItemBackground(scopeHead); scopeHead.setFocusable(true);
         scopeButton = disclosureLabel(scopeHead, R.string.rule_scope);
@@ -170,6 +173,48 @@ public final class RuleEditorPage {
         v.setTextColor(new ColorStateList(new int[][]{{-android.R.attr.state_enabled},{}},
                 new int[]{colors.disabledContent, InterfaceAppearance.contrasting(colors.primary, colors.surfaceContainer, 4.5)}));
         v.setMinHeight(dp(48)); v.setOnClickListener(w -> run.run()); return v;
+    }
+    private LinearLayout addHideModeField(TextView value) {
+        LinearLayout field = new LinearLayout(host) {
+            @Override public CharSequence getAccessibilityClassName() { return Button.class.getName(); }
+        };
+        field.setId(R.id.autohide_mode);
+        field.setGravity(Gravity.CENTER_VERTICAL);
+        field.setMinimumHeight(dp(AppearanceShapes.SETTING_MIN_HEIGHT));
+        field.setFocusable(true);
+        field.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        field.setContentDescription(host.getText(R.string.autohide_mode));
+        int surface = colors.surfaceContainer;
+        field.setBackground(new RippleDrawable(ColorStateList.valueOf(colors.ripple),
+                StandardAppearance.shape(field, surface, AppearanceShapes.MEDIUM), null));
+        field.setPaddingRelative(dp(16), dp(8), dp(12), dp(8));
+
+        LinearLayout labels = column();
+        labels.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        TextView caption = text(R.string.autohide_mode, AppearanceTypography.Role.BODY_SMALL);
+        caption.setIncludeFontPadding(false);
+        caption.setTextColor(InterfaceAppearance.contrasting(colors.onSurfaceVariant, surface, 4.5));
+        value.setIncludeFontPadding(false);
+        value.setTextColor(InterfaceAppearance.contrasting(colors.onSurface, surface, 4.5));
+        labels.addView(caption, MATCH, WRAP);
+        labels.addView(value, MATCH, WRAP);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, WRAP, 1f);
+        labelParams.setMarginEnd(dp(8));
+        field.addView(labels, labelParams);
+
+        ImageView caret = new ImageView(host);
+        caret.setImageResource(R.drawable.ic_arrow_drop_down);
+        caret.setImageTintList(ColorStateList.valueOf(InterfaceAppearance.contrasting(colors.primary, surface, 3)));
+        caret.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        field.addView(caret, dp(24), dp(24));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(MATCH, WRAP);
+        lp.topMargin = dp(4); lp.bottomMargin = dp(8);
+        body.addView(field, lp);
+        return field;
+    }
+    public void setHideModeLabel(int label) {
+        hideModeValue.setText(label);
+        hideModeField.setStateDescription(hideModeValue.getText());
     }
     private void heading(int label) {
         TextView v = text(label, AppearanceTypography.Role.TITLE_MEDIUM); v.setAccessibilityHeading(true);

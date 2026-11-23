@@ -19,10 +19,10 @@ three explicit confirmations. Recreation/backgrounding does not acknowledge it.
 Both buttons persist the selected design before recreating the activity. A failed
 write keeps the dialog open. The counter is independent of the release version.
 
-Predictive Back is a separate capability, `ENABLE_PREDICTIVE_BACK`: true for
-both distributions, with the setting disabled by default. `Preferences.isPredictiveBackEnabled()`
-enforces the capability and the user's choice. Ordinary Back and ordinary Material transitions remain available.
-The existing shared Back infrastructure is not removed.
+Predictive Back is available in both distributions through `ENABLE_PREDICTIVE_BACK`.
+`SystemNavigationMode` enables it on supported Android versions when the system
+uses gesture navigation. The posting form keeps its own setting for closing in one gesture.
+The Material 3 setting controls appearance independently.
 
 Do not move push, Google/Gemini translation implementations or the GMS security provider here.
 Local app security and predictive fixtures are shared in `distribution/features`;
@@ -33,6 +33,6 @@ gate permits Material while continuing to reject Firebase, GMS and ML Kit.
 Device acceptance still needs a fresh F-Droid install and update, light/dark
 themes, notice confirmation/recreation, design opt-out/re-enable, posting/player
 layouts and ordinary Back (button/gesture/IME) with both design choices. Also
-test predictive Back enabled and disabled, including its interaction with protected windows.
+test system gesture and button navigation, including their interaction with protected windows.
 Compile/test both variants and inspect the final merged F-Droid manifest and
 DEX/dependencies before publication. Source checks alone do not establish this.

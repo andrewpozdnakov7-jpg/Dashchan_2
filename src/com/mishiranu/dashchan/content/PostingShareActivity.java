@@ -53,7 +53,9 @@ public class PostingShareActivity extends ComponentActivity {
 		// Android can qualify a provider with a profile/user ID (content://10@authority/...).
 		int user = authority.lastIndexOf('@');
 		if (user >= 0) authority = authority.substring(user + 1);
-		if (BuildConfig.FILE_PROVIDER_AUTHORITY.equalsIgnoreCase(authority)) return false;
+		if (BuildConfig.FILE_PROVIDER_AUTHORITY.equalsIgnoreCase(authority)) {
+			return FileProvider.isSharedAttachmentUri(uri);
+		}
 		Boolean cached = providers.get(authority);
 		if (cached != null) return cached;
 		try {

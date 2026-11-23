@@ -22,6 +22,7 @@ public class FileProvider extends ContentProvider {
 	private static final String AUTHORITY = BuildConfig.FILE_PROVIDER_AUTHORITY;
 	private static final String PATH_UPDATES = "updates";
 	private static final String PATH_SHARE = "share";
+	private static final String PATH_SHARED_ATTACHMENT = "shared-attachment";
 	private static final String PATH_CRASH_REPORT = "crash-report";
 	static final String GALLERY_SHARE_FILE_NAME_START = "gallery-share-";
 
@@ -81,7 +82,7 @@ public class FileProvider extends ContentProvider {
 			File root = MainApplication.getInstance().getExternalCacheDir();
 			if (root != null && directory != null && root.getCanonicalFile().equals(directory.getCanonicalFile())) {
 				String path = ProviderFileResolver.relativePath(root, file);
-				if (path.indexOf('/') < 0 && path.startsWith(GALLERY_SHARE_FILE_NAME_START)) {
+				if (isShareFileName(path)) {
 					return buildUri(PATH_SHARE, path, type);
 				}
 			}
@@ -90,6 +91,30 @@ public class FileProvider extends ContentProvider {
 		}
 		return Uri.fromFile(file);
 	}
+
+	static File getSharedAttachmentDirectory() {
+		File cache = MainApplication.getInstance().getCacheDir();
+		return cache != null ? new File(cache, "shared-attachments") : null;
+	}
+
+	static Uri sharedAttachmentUri(File file) throws IOException {
+		String name = ProviderFileResolver.relativePath(getSharedAttachmentDirectory(), file);
+		return isShareFileName(name) ? buildUri(PATH_SHARED_ATTACHMENT, name, null) : null;
+	}
+
+	static boolean isSharedAttachmentUri(Uri uri) {
+		if (!"content".equals(uri.getScheme()) || !AUTHORITY.equals(uri.getAuthority())) return false;
+		List<String> segments = uri.getPathSegments();
+		if (segments.size() != 2 || !PATH_SHARED_ATTACHMENT.equals(segments.get(0))) return false;
+		String name = segments.get(1);
+		// Accept only a canonical URI for an actual file staged for sharing in the private cache.
+		return buildUri(PATH_SHARED_ATTACHMENT, name, null).equals(uri) && resolveFile(uri) != null;
+	}
+
+	private static boolean isShareFileName(String name) {
+		return name.startsWith(GALLERY_SHARE_FILE_NAME_START) && name.indexOf('/') < 0;
+	}
+
 	public static Uri crashReportUri(String name) throws IOException {
 		if (com.mishiranu.dashchan.util.CrashReports.resolveShare(MainApplication.getInstance(), name) == null) {
 			throw new IOException("Report export unavailable");
@@ -121,9 +146,12 @@ public class FileProvider extends ContentProvider {
 					return segments.size() == 2 ? getUpdatesFile(path) : null;
 				}
 				case PATH_SHARE: {
-					return segments.size() == 2 && path.indexOf('/') < 0
-							&& path.startsWith(GALLERY_SHARE_FILE_NAME_START)
+					return segments.size() == 2 && isShareFileName(path)
 							? ProviderFileResolver.resolve(MainApplication.getInstance().getExternalCacheDir(), path) : null;
+				}
+				case PATH_SHARED_ATTACHMENT: {
+					return segments.size() == 2 && isShareFileName(path)
+							? ProviderFileResolver.resolve(getSharedAttachmentDirectory(), path) : null;
 				}
 				default: throw new IllegalArgumentException("Unknown provider path");
 			}

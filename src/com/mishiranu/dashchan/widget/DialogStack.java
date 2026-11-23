@@ -473,7 +473,7 @@ public class DialogStack<T extends DialogStack.ViewFactory<T>> implements Iterab
 
 	private final Runnable navigationModeChanged = this::updateMotionPolicy;
 	private final SharedPreferences.Listener motionPreferencesListener = key -> {
-		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key) || Preferences.KEY_PREDICTIVE_BACK.equals(key)) updateMotionPolicy();
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) updateMotionPolicy();
 	};
 
 	private void updateMotionPolicy() {

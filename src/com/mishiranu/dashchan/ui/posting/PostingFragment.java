@@ -720,14 +720,14 @@ public class PostingFragment extends ContentFragment implements FragmentHandler.
 		}
 
 		// A rollover starts only with its OP payload. Leave unrelated shared inputs queued.
-		if (!requireArguments().getBoolean(EXTRA_ROLLOVER)) {
-			if (allowPosting) {
-				consumeFuturePostText();
-			}
-			ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftController.getFutureAttachmentDrafts();
-			if (!futureAttachmentDrafts.isEmpty()) {
-				attachmentController.addFutureAttachments(futureAttachmentDrafts);
-				draftController.consumeFutureAttachmentDrafts();
+		if (allowPosting && !sendCoordinator.isSendSuccess() && !requireArguments().getBoolean(EXTRA_ROLLOVER)) {
+			consumeFuturePostText();
+			if (attachmentController.canAttach()) {
+				ArrayList<DraftsStorage.AttachmentDraft> futureAttachmentDrafts = draftController.getFutureAttachmentDrafts();
+				if (!futureAttachmentDrafts.isEmpty()) {
+					attachmentController.addFutureAttachments(futureAttachmentDrafts);
+					draftController.consumeFutureAttachmentDrafts();
+				}
 			}
 		}
 		requireArguments().putBoolean(EXTRA_ROLLOVER, false);

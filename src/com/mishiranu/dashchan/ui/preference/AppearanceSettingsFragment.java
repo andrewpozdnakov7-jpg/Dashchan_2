@@ -8,9 +8,6 @@ import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.ui.FragmentHandler;
 import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.util.SharedPreferences;
-import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.ui.preference.core.Preference;
-import com.mishiranu.dashchan.util.SystemNavigationMode;
 import com.mishiranu.dashchan.util.ResourceUtils;
 import com.mishiranu.dashchan.widget.ThemeEngine;
 import java.util.ArrayList;
@@ -19,8 +16,6 @@ import java.util.List;
 
 /** Appearance controls retain their existing keys, dependencies and dialog behavior. */
 public class AppearanceSettingsFragment extends PreferenceFragment {
-	private Preference<Void> predictiveBackEntry;
-	private final Runnable navigationChanged = this::refreshPredictiveEntry;
 	@Override protected SharedPreferences getPreferences() { return Preferences.PREFERENCES; }
 	@Override public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
@@ -83,37 +78,6 @@ public class AppearanceSettingsFragment extends PreferenceFragment {
 				R.string.night_theme, darkThemeEntries).setOnAfterChangeListener(p -> requireActivity().recreate());
 		addDependency(Preferences.KEY_DAY_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
 		addDependency(Preferences.KEY_NIGHT_THEME, Preferences.KEY_AUTOMATIC_DAY_NIGHT_THEME, true);
-		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
-			predictiveBackEntry = addButton(getString(R.string.predictive_back_title),
-					p -> PredictiveBackSettingsFragment.entrySummary(requireContext()));
-			predictiveBackEntry.setOnClickListener(p -> {
-				if (PredictiveBackSettingsFragment.isAvailable()) ((FragmentHandler) requireActivity())
-						.pushFragment(new PredictiveBackSettingsFragment());
-			});
-			refreshPredictiveEntry();
-		}
-
-	}
-
-	private void refreshPredictiveEntry() {
-		if (getView() == null || predictiveBackEntry == null) return;
-		boolean enabled = PredictiveBackSettingsFragment.isAvailable();
-		if (predictiveBackEntry.isEnabled() != enabled) predictiveBackEntry.setEnabled(enabled);
-		predictiveBackEntry.invalidate();
-	}
-	@Override public void onStart() {
-		super.onStart(); SystemNavigationMode.addListener(navigationChanged);
-	}
-	@Override public void onResume() {
-		super.onResume(); SystemNavigationMode.refresh(requireActivity().getWindow().getDecorView()); refreshPredictiveEntry();
-	}
-	@Override public void onStop() {
-		SystemNavigationMode.removeListener(navigationChanged); super.onStop();
-	}
-
-	@Override public void onDestroyView() {
-		SystemNavigationMode.removeListener(navigationChanged); predictiveBackEntry = null;
-		super.onDestroyView();
 	}
 	@Override public void onViewStateRestored(Bundle savedInstanceState) {
 		super.onViewStateRestored(savedInstanceState);

@@ -79,6 +79,13 @@
 	<string name="audio_playback">Воспроизведение аудио</string>
 	<string name="audio_player">Аудиоплеер</string>
 	<string name="autohide">Автоскрытие</string>
+	<string name="autohide_settings">Настройки автоскрытия</string>
+	<string name="autohide_mode">Режим скрытия</string>
+	<string name="autohide_mode__format">Режим скрытия · %1$s</string>
+	<string name="autohide_mode_inherit">По общей настройке</string>
+	<string name="autohide_mode_collapse">Свернуть</string>
+	<string name="autohide_mode_remove">Скрыть полностью</string>
+	<string name="autohide_list_no_fields">не выбраны поля поиска</string>
 	<string name="autohide_scope">Область скрытия</string>
 	<string name="automatic_update_check">Автоматическая проверка обновлений</string>
 	<string name="available__plural">Доступные</string>
@@ -285,7 +292,7 @@
 	<string name="disabled">Отключено</string>
 	<string name="display_hidden_threads">Выводить скрытые треды</string>
 	<string name="remove_hidden_threads">Полностью убирать скрытые треды</string>
-	<string name="remove_hidden_threads__summary">Не показывать даже свёрнутые строки скрытых тредов. Действует на ручное скрытие и правила автоскрытия.</string>
+	<string name="remove_hidden_threads__summary">Действует на скрытые вручную треды и правила, которые используют общую настройку.</string>
 	<string name="display_post_icons">Показывать иконки сообщений</string>
 	<string name="display_post_icons__summary">Иконки доступны в некоторых разделах</string>
 	<string name="do_nothing">Ничего не делать</string>
@@ -311,11 +318,9 @@
 	<string name="no_more_threads">Больше тредов нет</string>
 	<string name="enabled">Включено</string>
 	<string name="predictive_back_title">Predictive Back</string>
-	<string name="predictive_back_settings_summary">Предпросмотр возврата и поведение жеста в форме сообщения</string>
-	<string name="predictive_back_enable_system_gestures">Включите управление жестами в настройках Android</string>
+	<string name="predictive_back_settings_summary">Предпросмотр при возврате включается автоматически при жестовой навигации Android.</string>
+	<string name="predictive_back_enable_system_gestures">Для предпросмотра при возврате включите жестовую навигацию в настройках Android.</string>
 	<string name="predictive_back_requires_android">Доступно на Android 13 и новее</string>
-	<string name="enable_predictive_back">Включить Predictive Back</string>
-	<string name="enable_predictive_back__summary">Показывать предыдущий экран во время жеста «Назад». Включается автоматически при обнаружении системных жестов, если вы ещё не меняли эту настройку.</string>
 	<string name="posting_back_single_gesture">Закрывать «Новое сообщение» одним жестом</string>
 	<string name="posting_back_single_gesture_summary">Сразу выходить из формы, даже если открыта клавиатура или выделен текст. При отключении «Назад» сначала скрывает клавиатуру и снимает выделение.</string>
 	<string name="posting_back_single_gesture_requires_android">Доступно на Android 14 и новее</string>
@@ -427,6 +432,8 @@
 	<string name="delete_font_dialog_title">Удалить шрифт</string>
 	<string name="s24_ultra_oneui9_toolbar_fix">Фикс для S24 Ultra OneUI 9</string>
 	<string name="s24_ultra_oneui9_toolbar_fix_summary">Одинаковые размеры и отступы кнопок обновления и меню в верхней панели.</string>
+	<string name="lenovo_tb320fc_keyboard_fix">Фикс для клавиатуры Lenovo TB320FC</string>
+	<string name="lenovo_tb320fc_keyboard_fix_summary">Оставляет кнопки новой формы ответа над клавиатурой.</string>
 	<string name="video_diagnostics_begin">Начать</string>
 	<string name="video_diagnostics_extended">Расширенный лог</string>
 	<string name="video_diagnostics_saving">Сохранение диагностики…</string>
@@ -642,6 +649,8 @@
 	<string name="play">Воспроизведение</string>
 	<string name="play_after_scroll">Воспроизвести после прокрутки</string>
 	<string name="play_after_scroll__summary">Не показывать кнопку воспроизведения перед просмотром видео</string>
+	<string name="ignore_audio_focus">Игнорировать фокус аудио</string>
+	<string name="ignore_audio_focus__summary">Позволяет слушать аудио и видео в Slooop, пока в других приложениях играет звук.</string>
 	<string name="start_videos_muted">Запускать видео без звука</string>
 	<string name="remember_last_video_position">Запоминать позицию последнего видео</string>
 	<string name="remember_last_video_position__summary">Продолжать последнее видео при повторном открытии, в том числе после перезапуска приложения. Просмотренное до конца видео начинается заново</string>
@@ -753,7 +762,7 @@
 	<string name="posts">Сообщения</string>
 	<string name="posts_list">Список сообщений</string>
 	<string name="remove_hidden_posts">Полностью убирать скрытые сообщения</string>
-	<string name="remove_hidden_posts__summary">Не показывать даже свёрнутые строки скрытых сообщений. Действует на ручное скрытие, правила автоскрытия и фильтр AI-постов.</string>
+	<string name="remove_hidden_posts__summary">Действует на скрытые вручную сообщения, правила с общей настройкой и фильтр AI-постов.</string>
 	<string name="posts_with_files__genitive">Сообщений с файлами</string>
 	<string name="posts_with_same_name">Сообщения с таким же именем</string>
 	<string name="preferences">Настройки</string>

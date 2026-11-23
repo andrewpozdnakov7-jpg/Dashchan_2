@@ -215,6 +215,17 @@ public final class InterfaceAppearance {
 	public static void icon(ImageView view) { role(view, Role.ICON); }
 	public static void secondary(TextView view) { role(view, Role.SECONDARY); }
 	public static void audioTitle(TextView view) { role(view, Role.AUDIO_TITLE); }
+	/** A decorative leading glyph; the existing settings row owns the title, ripple and click. */
+	public static void settingsIndexIcon(ImageView icon) {
+		ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) icon.getLayoutParams();
+		int end = StandardAppearance.dp(icon, AppearanceShapes.SPACE_16);
+		if (params.getMarginEnd() != end) {
+			params.setMarginEnd(end);
+			icon.setLayoutParams(params);
+		}
+		icon.setImageTintList(ColorStateList.valueOf(StandardAppearance.colors(icon.getContext()).onSurfaceVariant));
+		icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+	}
 	public static void settingsRow(View view, TextView title, TextView summary, View widgets, boolean header) {
 		StandardAppearance.prepare(view, title, summary, null, widgets);
 		row(view, title, summary, header);

@@ -1637,19 +1637,11 @@ public class Preferences {
 		return PREFERENCES.getBoolean(KEY_PAGE_BY_PAGE, DEFAULT_PAGE_BY_PAGE);
 	}
 
-	public static final String KEY_PREDICTIVE_BACK = "predictive_back";
-	public static final boolean DEFAULT_PREDICTIVE_BACK = false;
 	public static final String KEY_POSTING_BACK_SINGLE_GESTURE = "posting_back_single_gesture";
 	public static final boolean DEFAULT_POSTING_BACK_SINGLE_GESTURE = true;
 
 	public static boolean isPostingBackSingleGestureEnabled() {
 		return PREFERENCES.getBoolean(KEY_POSTING_BACK_SINGLE_GESTURE, DEFAULT_POSTING_BACK_SINGLE_GESTURE);
-	}
-
-	public static boolean isPredictiveBackEnabled() {
-		// A restored preference must not enable a feature excluded from this distribution.
-		return BuildConfig.ENABLE_PREDICTIVE_BACK &&
-				PREFERENCES.getBoolean(KEY_PREDICTIVE_BACK, DEFAULT_PREDICTIVE_BACK);
 	}
 
 	public enum PagesListMode {
@@ -2320,6 +2312,13 @@ public class Preferences {
 				* 1024L * 1024L;
 	}
 
+	public static final String KEY_IGNORE_AUDIO_FOCUS = "ignore_audio_focus";
+	public static final boolean DEFAULT_IGNORE_AUDIO_FOCUS = false;
+
+	public static boolean isIgnoreAudioFocusEnabled() {
+		return PREFERENCES.getBoolean(KEY_IGNORE_AUDIO_FOCUS, DEFAULT_IGNORE_AUDIO_FOCUS);
+	}
+
 	public static final String KEY_VIDEO_START_MUTED = "video_start_muted";
 	public static final boolean DEFAULT_VIDEO_START_MUTED = false;
 
@@ -2339,6 +2338,13 @@ public class Preferences {
 
 	public static boolean isS24UltraOneUi9ToolbarFixEnabled() {
 		return PREFERENCES.getBoolean(KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX, DEFAULT_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
+	}
+
+	public static final String KEY_LENOVO_TB320FC_KEYBOARD_FIX = "experimental_lenovo_tb320fc_keyboard_fix";
+	public static final boolean DEFAULT_LENOVO_TB320FC_KEYBOARD_FIX = true;
+
+	public static boolean isLenovoTb320fcKeyboardFixEnabled() {
+		return PREFERENCES.getBoolean(KEY_LENOVO_TB320FC_KEYBOARD_FIX, DEFAULT_LENOVO_TB320FC_KEYBOARD_FIX);
 	}
 
 	public static final String KEY_COMPACT_DIALOGS = "experimental_compact_dialogs";
