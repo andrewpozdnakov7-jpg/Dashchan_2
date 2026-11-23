@@ -33,38 +33,17 @@ GitHub-версия содержит встроенную проверку об�
 
 ### Возможности
 
-- просмотр досок, тредов, изображений и видео, избранное, слежение за тредами и фоновые уведомления;
-- встроенный Двач с отправкой постов, Passcode, AI-фильтром и лайками/дизлайками на поддерживаемых досках;
-- встроенный «Кекабу»: каталог до 200 популярных сообществ с категориями, сворачиваемыми разделами и поиском, добавление собственных сообществ, теги, тематические ленты, вход через официальный сайт, оценки историй и комментариев, отправка и удаление своих комментариев;
-- встроенные Ежчан, ECH (e444), Апачан, Zchan и Endchan с чтением и отправкой сообщений, а также d3.ru, Архивач и экспериментальный 4chan в режиме чтения. Подробности о доменах ECH и переходе со старого расширения есть в [справке по бордам](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards#ech-e444);
-- экспериментальный Soyjak.party 🫘 (`soyjak.st`) в режиме чтения с каталогами досок, тредами, вложениями и переводом постов;
-- экспериментальные режимы Reddit: официальный сайт внутри приложения, каталог до 200 популярных сообществ и отдельные режимы доски и чтения обсуждений, выключенные по умолчанию;
-- редактирование постов и сортировка тредов на Апачане по последнему бампу, дате создания или количеству сообщений;
-- «Мои доски» для объединения досок разных имиджборд в несколько собственных лент;
-- экспериментальный раздел «Ответы», включённый по умолчанию и отключаемый в настройках: локальное запоминание отправленных через Slooop сообщений, автоматическая проверка ответов, счётчик непрочитанных, системные уведомления и очищаемый журнал последних 50 ответов; свежие треды проверяются чаще, а давно неактивные — реже;
-- офлайн-перевод постов через Mozilla Bergamot, отдельное дополнение Google ML Kit или Gemini Nano на поддерживаемых устройствах;
-- FFmpeg-плеер для WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9 и AV1;
-- скорость воспроизведения с сохранением тембра и редактируемыми пресетами, перемотка двойным нажатием, масштабирование видео до 10×, отдельная громкость, настраиваемый жест громкости, полноэкранный режим, «картинка в картинке» и TikTok-режим для переключения видео вертикальными свайпами;
-- выбор открытия YouTube-ссылок во внешнем приложении или в экспериментальном плеере Slooop с переходом в PiP;
-- галерея с фильтрами, редактор изображений, копирование и поиск по изображениям, а также фоновое сохранение медиа;
-- локальные HTML- и ZIP-архивы тредов, добавление новых постов к сохранённой копии, встроенный просмотрщик и подключение дополнительных папок;
-- настройка видимости и порядка разделов бокового меню, сворачивание и необязательная автоочистка открытых страниц;
-- [экспериментальная защита приложения](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Security) с PIN, биометрией и настройкой показа текста уведомлений в фоне;
-- встроенные, загружаемые и пользовательские темы, фоновые изображения и автоматический дневной и ночной режим;
-- поиск по настройкам, Predictive Back, масштаб текста, загружаемый каталог свободных шрифтов, OpenDyslexic и импорт TTF/OTF;
-- выбор имени и значка приложения, включая народное имя «ТОГДАЧ», а также создание собственного ярлыка;
-- мгновенное открытие локального списка изменений с фоновой загрузкой только новых записей;
-- проверка стабильных обновлений с докачиванием APK в GitHub-версии.
+- Доски и треды, избранное, свои ленты «Мои доски» и уведомления об ответах.
+- Офлайн-перевод постов и локальные архивы тредов с обновлением сохранённой копии.
+- Галерея, фоторедактор и поиск по картинке.
+- Видеоплеер с PiP и конвертер видео для вложений.
+- Темы, шрифты, масштаб текста, Predictive Back и настройка бокового меню и ярлыка.
+- Защита приложения с PIN и биометрией.
 
 ### Ограничения
 
-- d3.ru, 4chan, Архивач и Soyjak.party доступны в режиме чтения; «Кекабу» пока не публикует истории и не обходит возрастные ограничения Пикабу;
-- режимы Reddit и внутреннее воспроизведение YouTube/PiP экспериментальны, зависят от сайтов, WebView, сети и устройства и могут работать не везде; веб-интерфейсы поддерживаемых сайтов могут меняться;
-- Google ML Kit доступен только как отдельное дополнение GitHub-версии, а Gemini Nano работает только на поддерживаемых устройствах;
-- Predictive Back автоматически включается при обнаружении системной жестовой навигации на Android 13+, если пользователь ещё не выбрал настройку. Предпросмотр переходов в приложении требует Android 14+. В F-Droid 3.2.85 Predictive Back включается вручную.
-- «картинка в картинке» и автоматический переход в неё включены по умолчанию, отключаются в настройках и требуют поддержки устройства и разрешённого Android доступа к PiP;
-- локальное отслеживание в разделе «Ответы» включено по умолчанию; серверные push-уведомления включаются отдельно с согласием пользователя; системные уведомления зависят от разрешения на Android 13+ и настроек канала уведомлений;
-- `targetSdk` равен 37 для совместимости с Android 17; `minSdk` остаётся равен 30.
+- Возможность публикации зависит от форума. Подробнее — в [справке по форумам](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards).
+- Встроенные режимы Reddit и YouTube экспериментальные и зависят от работы сайтов.
 
 ### Сборка
 
@@ -102,6 +81,7 @@ APK появится в `build/outputs/apk`. Первая сборка скач�
 1. **Vados** (анонимный участник) — тестирование приложения и идеи по развитию галереи, видеоплеера и поддержки Reddit.
 2. **[kamik-hub](https://github.com/kamik-hub)** (Самсунг-кун) — тестирование сборок, отчёты о падениях и идеи по развитию интерфейса и видеоконвертера.
 3. **squad wow** (fsdfdsfsd575756@gmail.com) — независимая проверка воспроизводимости сборок F-Droid, поиск багов в работе с расширениями, идеи по навигации в тредах и приватности уведомлений.
+4. **Max Relax** (анонимный участник) — тестирование приложения и помощь в улучшении формы ответа, работы клавиатуры и функции «Поделиться».
 
 ### Происхождение и авторы
 
@@ -136,37 +116,17 @@ F-Droid delivers updates through its repository. Local background reply checks r
 
 ### Highlights
 
-- boards, threads, media gallery, favorites, thread watching, and background notifications;
-- built-in Dvach posting, Passcode support, AI filtering, and votes on supported boards;
-- built-in Kekabu access with a catalog of up to 200 popular communities, collapsible categories, search and custom communities, official-site sign-in, account-available 18+ media, user-initiated story and comment votes, and posting and deletion of the user's own comments;
-- built-in Ejchan, ECH (e444), Apachan, Zchan, and Endchan reading and posting, plus read-only d3.ru and Arhivach and experimental read-only 4chan access. See the [Boards guide](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards#ech-e444) for ECH domains and legacy extension handling;
-- experimental read-only access to Soyjak.party 🫘 (`soyjak.st`), with board catalogs, threads, attachments, and post translation;
-- experimental Reddit modes with the official website inside the app, a catalog of up to 200 popular communities, and separate opt-in board and discussion-reader modes;
-- Apachan post editing and thread sorting by last bump, creation date, or post count;
-- My Boards feeds that combine boards from different imageboards into several custom feeds;
-- an experimental Replies section, enabled by default and switchable off in settings, that locally remembers messages sent through Slooop, automatically checks for replies, shows an unread counter and Android notifications, and keeps a clearable history of the latest 50 replies; recent threads are checked more frequently than inactive ones;
-- offline post translation through Mozilla Bergamot, the separate Google ML Kit add-on, or Gemini Nano on supported devices;
-- FFmpeg playback for WebM, MP4, fMP4, MOV, H.264, HEVC, VP8, VP9, and AV1;
-- pitch-preserving speed control with editable presets, double-tap seeking, video zoom up to 10×, per-video volume, configurable volume gestures, fullscreen playback, picture-in-picture, and a TikTok mode for switching videos with vertical swipes;
-- a choice between opening YouTube links externally or through the experimental Slooop player with PiP;
-- gallery filters, an image editor, clipboard image copying, reverse-image search, and background media saving;
-- local HTML/ZIP thread archives with incremental updates, a built-in viewer, and support for additional archive folders;
-- configurable side menu order and visibility, collapsible lists of open pages, and optional automatic cleanup of open pages;
-- [experimental app protection](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Security-English) with PIN, biometrics, and a setting for hiding notification text in the background;
-- bundled, downloadable, and user-imported themes, optional wallpapers, and automatic day and night switching;
-- settings search, Predictive Back, text scaling, a downloadable catalog of free fonts, OpenDyslexic, custom TTF/OTF fonts, and configurable app names and icons, including the community name “ТОГДАЧ”;
-- immediate loading of the bundled changelog followed by background retrieval of newer entries only;
-- stable update checks with resumable APK downloads in the GitHub build.
+- Boards and threads, favorites, custom My Boards feeds, and reply notifications.
+- Offline post translation and local thread archives that can be updated.
+- Gallery, photo editor, and reverse image search.
+- Video player with picture-in-picture and a video converter for attachments.
+- Themes, fonts, text scaling, Predictive Back, and a customizable side menu and launcher shortcut.
+- App protection with a PIN and biometrics.
 
 ### Limitations
 
-- d3.ru, 4chan, Arhivach, and Soyjak.party are read-only; Kekabu does not publish stories or bypass Pikabu age restrictions;
-- Reddit modes and internal YouTube/PiP playback are experimental, depend on the websites, WebView, network, and device, and may not work everywhere; supported websites may change their interfaces;
-- Google ML Kit is available only as a separate add-on for the GitHub build, while Gemini Nano requires a supported device;
-- Predictive Back turns on automatically when system gesture navigation is detected on Android 13+ if the user has not set a preference. In-app previews require Android 14+. In F-Droid 3.2.85, enable Predictive Back manually.
-- picture-in-picture and automatic entry are on by default, can be disabled in settings, and require device support and Android PiP access;
-- local Replies tracking is on by default; server push notifications require a separate opt-in and user consent; Android notifications depend on the Android 13+ notification permission and notification-channel settings;
-- `targetSdk` is 37 for Android 17 compatibility; `minSdk` remains 30.
+- Posting options vary by forum. See the [Boards guide](https://github.com/andrewpozdnakov7-jpg/Dashchan_2/wiki/Boards) for details.
+- The built-in Reddit and YouTube modes are experimental and depend on the websites.
 
 ### Building
 
@@ -187,6 +147,7 @@ See [docs/BUILDING.md](docs/BUILDING.md), [docs/TESTING.md](docs/TESTING.md), an
 1. **Vados** (anonymous contributor) — app testing and ideas for improving the gallery, video player, and Reddit support.
 2. **[kamik-hub](https://github.com/kamik-hub)** (Самсунг-кун) — testing builds, reporting crashes, and suggesting improvements to the interface and video converter.
 3. **squad wow** (fsdfdsfsd575756@gmail.com) — independently verifying reproducible F-Droid builds, finding bugs in extension handling, and suggesting improvements to thread navigation and notification privacy.
+4. **Max Relax** (anonymous contributor) — testing the app and helping improve the reply form, keyboard behavior, and sharing.
 
 ### Feedback, Credits, and License
 
