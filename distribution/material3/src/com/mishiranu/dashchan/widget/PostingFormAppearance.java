@@ -63,6 +63,9 @@ public final class PostingFormAppearance {
 	private final LinearLayout form;
 	private final View actionPanel;
 	private final LinearLayout body;
+	private final int bodyBottomPadding;
+	private final int[] bodyLocation = new int[2];
+	private int keyboardOverlap;
 	private final List<Field> fields = new ArrayList<>();
 	private final List<View> commands = new ArrayList<>();
 	private final List<View> inlineCommands = new ArrayList<>();
@@ -169,6 +172,7 @@ public final class PostingFormAppearance {
 		form = root.findViewById(R.id.posting_layout);
 		actionPanel = root.findViewById(R.id.posting_action_container);
 		body = (LinearLayout) scroll.getParent();
+		bodyBottomPadding = body.getPaddingBottom();
 		root.setTag(R.id.posting_form_owner, this);
 		root.addOnAttachStateChangeListener(attachmentRevealLifetime);
 		updatePalette();
@@ -1242,6 +1246,31 @@ public final class PostingFormAppearance {
 		updateLayout(insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()));
 	}
 
+	private boolean updateKeyboardViewport(boolean keyboardVisible) {
+		int overlap = 0;
+		if (keyboardVisible && body.getHeight() > 0 && Preferences.isLenovoTb320fcKeyboardFixEnabled()) {
+			WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(body);
+			int imeBottom = insets != null && insets.isVisible(WindowInsetsCompat.Type.ime())
+					? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0;
+			if (imeBottom > 0) {
+				WindowManager windowManager = body.getContext().getSystemService(WindowManager.class);
+				if (windowManager != null) {
+					// Window metrics keep the keyboard edge in window coordinates even when a parent has resized.
+					int keyboardTop = windowManager.getCurrentWindowMetrics().getBounds().height() - imeBottom;
+					body.getLocationInWindow(bodyLocation);
+					int contentTop = bodyLocation[1] + body.getPaddingTop();
+					int contentBottom = bodyLocation[1] + body.getHeight() - bodyBottomPadding;
+					overlap = EditorHeightPolicy.keyboardOverlap(contentTop, contentBottom, keyboardTop);
+				}
+			}
+		}
+		if (overlap == keyboardOverlap) return false;
+		keyboardOverlap = overlap;
+		// Constrain the actual viewport so sizing, scrolling and the fixed footer share the same edge.
+		ViewUtils.setNewPadding(body, null, null, null, bodyBottomPadding + overlap);
+		return true;
+	}
+
 	private void scheduleEditorResize() {
 		if (!closed && !editorResizePending) editorResizePending = scroll.post(editorResize);
 	}
@@ -1278,7 +1307,6 @@ public final class PostingFormAppearance {
 						+ field.input.getCompoundPaddingTop() + field.input.getCompoundPaddingBottom());
 			}
 		}
-		int usableHeight = body.getHeight() - body.getPaddingTop() - body.getPaddingBottom();
 		int otherFields = dp(root, 16) + dp(root, 16);
 		boolean adaptive = Preferences.getPostingEditorHeightMode() == EditorHeightPolicy.Mode.AUTOMATIC;
 		for (int i = 0; i < form.getChildCount(); i++) {
@@ -1298,6 +1326,8 @@ public final class PostingFormAppearance {
 		boolean actionsChanged = keyboardActions != keyboardVisible;
 		boolean nextDocked = adaptive && comment != null && comment.hasFocus() && keyboardVisible;
 		if (imeMotion != null && (actionsChanged || nextDocked != keyboardDocked)) imeMotion.begin();
+		boolean viewportChanged = updateKeyboardViewport(keyboardVisible);
+		int usableHeight = body.getHeight() - body.getPaddingTop() - body.getPaddingBottom();
 		keyboardActions = keyboardVisible;
 		syncConversionCaption(nextDocked);
 		layoutAttachment();
@@ -1327,6 +1357,10 @@ public final class PostingFormAppearance {
 			keyboardDocked = nextDocked;
 			revealKeyboardEditor = nextDocked;
 			scroll.requestLayout();
+			scheduleEditorResize();
+		}
+		if (viewportChanged) {
+			revealKeyboardEditor = nextDocked;
 			scheduleEditorResize();
 		}
 		// With cards, keep the same footer immediately after the grid in the form.
@@ -1660,6 +1694,7 @@ public final class PostingFormAppearance {
 		CaptchaDialogAppearance.unobserve(foregroundCaptchaListener);
 		deactivateToolbar();
 		closed = true;
+		updateKeyboardViewport(false);
 		cancelPrimaryReveal();
 		cancelAttachmentReveal();
 		root.removeOnAttachStateChangeListener(attachmentRevealLifetime);

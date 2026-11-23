@@ -7,6 +7,7 @@ import android.webkit.WebView;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
 import com.mishiranu.dashchan.media.VideoDiagnostics;
 import java.util.ArrayList;
 import java.util.Objects;
@@ -58,11 +59,16 @@ public final class WebHistoryPreview implements AutoCloseable {
 		if (visuallyReady && !isBusy()) scheduleCapture();
 	};
 	private final SharedPreferences.Listener preferences = this::preferencesChanged;
+	private final Runnable navigationModeChanged = this::refreshPreviewPolicy;
 	private void preferencesChanged(String key) {
-		if (key != null && !Preferences.KEY_PREDICTIVE_BACK.equals(key) && !Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)
+		if (key != null && !Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)
 				&& !key.contains("theme") && !Preferences.KEY_REDDIT_WEB_READER_STYLE.equals(key)
 				&& !Preferences.KEY_REDDIT_BOARD_STYLE.equals(key) && !Preferences.KEY_REDDIT_WEB_READER_ENABLED.equals(key)) return;
-		releaseSnapshots(); if (enabled() && web.getProgress() == 100 && web.isShown()) pageReady();
+		refreshPreviewPolicy();
+	}
+	private void refreshPreviewPolicy() {
+		releaseSnapshots();
+		if (enabled() && web.getProgress() == 100 && web.isShown()) pageReady();
 	}
 	private final View.OnAttachStateChangeListener attachment = new View.OnAttachStateChangeListener() {
 		@Override public void onViewAttachedToWindow(View view) {}
@@ -78,6 +84,7 @@ public final class WebHistoryPreview implements AutoCloseable {
 		web.getViewTreeObserver().addOnScrollChangedListener(scroll);
 		web.addOnAttachStateChangeListener(attachment); web.addOnLayoutChangeListener(layout);
 		Preferences.PREFERENCES.register(preferences);
+		SystemNavigationMode.addListener(navigationModeChanged);
 	}
 	private boolean enabled() { return !closed && !paused && permitted.getAsBoolean() && InterfaceMotion.isPredictiveBackEnabled(); }
 	public boolean isBusy() { return preview != null && preview.isBusy(); }
@@ -263,6 +270,7 @@ public final class WebHistoryPreview implements AutoCloseable {
 	@Override public void close() {
 		if (closed) return;
 		closed = true; clear(); memory.close(); Preferences.PREFERENCES.unregister(preferences);
+		SystemNavigationMode.removeListener(navigationModeChanged);
 		web.getViewTreeObserver().removeOnScrollChangedListener(scroll);
 		web.removeOnAttachStateChangeListener(attachment); web.removeOnLayoutChangeListener(layout);
 	}

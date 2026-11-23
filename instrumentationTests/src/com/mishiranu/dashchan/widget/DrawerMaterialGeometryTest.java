@@ -13,6 +13,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.mishiranu.dashchan.content.service.WatcherService;
 import com.mishiranu.dashchan.content.FontManager;
+import com.mishiranu.dashchan.content.Preferences;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -75,6 +76,12 @@ public class DrawerMaterialGeometryTest {
 						if (modern) {
 							View chip = watcher.getChildAt(0); assertEquals(style.chipWidth, chip.getWidth()); assertEquals(style.chipHeight, chip.getHeight());
 							assertEquals(chip.getLeft(), bounds.left, 0); assertEquals(chip.getTop(), bounds.top, 0);
+						} else {
+							assertTrue("Classic badge must keep its original minimum height", bounds.height() >= style.dp(24));
+							if (scale == 1f && Preferences.getDrawerTextScalePercent() == Preferences.DEFAULT_TEXT_SCALE) {
+								assertEquals(style.dp(32), bounds.width(), 0);
+								assertEquals(style.dp(24), bounds.height(), 0);
+							}
 						}
 						previous = bounds;
 					}

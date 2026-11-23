@@ -15,6 +15,8 @@ import com.mishiranu.dashchan.content.model.AttachmentItem;
 import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.storage.AutohideStorage;
+import com.mishiranu.dashchan.content.storage.AutohideStorage.HideMode;
 import com.mishiranu.dashchan.ui.ReplySwipeOverlap;
 import com.mishiranu.dashchan.content.service.DownloadService;
 import com.mishiranu.dashchan.content.service.WatcherService;
@@ -129,6 +131,10 @@ public class UiManager {
 
 		default boolean isHiddenResolve(PostItem postItem) {
 			return postItem.getHideState().hidden;
+		}
+
+		default boolean isRemovedResolve(PostItem postItem, boolean removeByDefault) {
+			return isHiddenResolve(postItem) && postItem.getHideMode().removes(removeByDefault);
 		}
 
 		default boolean isUserPost(PostNumber postNumber) {
@@ -253,16 +259,18 @@ public class UiManager {
 
 		public int getVisibleReplyCount(PostItem postItem) {
 			Collection<PostNumber> referencesFrom = postItem.getReferencesFrom();
-			if (!Preferences.isRemoveHiddenPosts()) {
+			boolean removeByDefault = Preferences.isRemoveHiddenPosts();
+			if (!removeByDefault && AutohideStorage.getInstance().getStrongestMode(false) != HideMode.REMOVE) {
 				return referencesFrom.size();
 			}
 			if (postsProvider == null) {
-				return 0;
+				return removeByDefault ? 0 : referencesFrom.size();
 			}
 			int replyCount = 0;
 			for (PostNumber postNumber : referencesFrom) {
 				PostItem replyPostItem = postsProvider.findPostItem(postNumber);
-				if (replyPostItem != null && !postStateProvider.isHiddenResolve(replyPostItem)) {
+				if (replyPostItem == null ? !removeByDefault
+						: !postStateProvider.isRemovedResolve(replyPostItem, removeByDefault)) {
 					replyCount++;
 				}
 			}

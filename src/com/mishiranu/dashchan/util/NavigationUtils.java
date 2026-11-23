@@ -279,7 +279,7 @@ public class NavigationUtils {
 	}
 
 	public static void shareFile(Context context, File file, String fileName) {
-		Pair<Uri, String> data = CacheManager.getInstance().prepareFileForShare(file, fileName);
+		Pair<Uri, String> data = CacheManager.getInstance().prepareAttachmentForShare(file, fileName);
 		if (data == null) {
 			ClickableToast.show(R.string.cache_is_unavailable);
 			return;

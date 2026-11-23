@@ -3031,13 +3031,34 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 	@Override protected void onSystemNavigationModeChanged() {
 		com.mishiranu.dashchan.util.SystemNavigationMode.Mode next = com.mishiranu.dashchan.util.SystemNavigationMode.get();
 		boolean changed = appliedNavigationMode != next;
-		boolean buttons = appliedNavigationMode == com.mishiranu.dashchan.util.SystemNavigationMode.Mode.BUTTONS
-				|| next == com.mishiranu.dashchan.util.SystemNavigationMode.Mode.BUTTONS;
 		appliedNavigationMode = next;
 		// Returning from the background in the same mode must keep predictive snapshots.
-		if (changed && buttons && drawerForm != null && toolbarHolder != null) {
-			preferencesListener.onChanged(Preferences.KEY_PREDICTIVE_BACK);
+		if (changed && drawerForm != null && toolbarHolder != null) {
+			refreshBackMotionPolicy();
 		} else updateSystemBackCallback();
+	}
+
+	private void refreshBackMotionPolicy() {
+		finishLocalToolbarMotion();
+		com.mishiranu.dashchan.widget.SurfaceMotion.updatePopupPolicies();
+		com.mishiranu.dashchan.widget.InterfaceAppearance.refreshTree(findViewById(android.R.id.content));
+		toolbarHolder.applyStandardAppearance();
+		com.mishiranu.dashchan.widget.PullLoadingIndicator.refreshTree(findViewById(android.R.id.content));
+		View toolbar = findViewById(R.id.toolbar);
+		if (toolbar instanceof com.mishiranu.dashchan.widget.CompactToolbar) {
+			((com.mishiranu.dashchan.widget.CompactToolbar) toolbar).refreshMotionPolicy();
+		}
+		if (toolbarExtra instanceof com.mishiranu.dashchan.widget.MotionToolbarExtra) {
+			((com.mishiranu.dashchan.widget.MotionToolbarExtra) toolbarExtra).updatePolicy();
+		}
+		if (expandedScreen != null) expandedScreen.updateMotionPolicy();
+		if (screenMotion != null) screenMotion.finish();
+		if (threadMotion != null) threadMotion.clear();
+		resetPredictiveBackView(false);
+		if (predictiveBack != null) predictiveBack.clear("motion_policy_changed");
+		if (drawerMotion != null) drawerMotion.updatePolicy();
+		prepareBackPreview();
+		updateSystemBackCallback();
 	}
 
 	private final SharedPreferences.Listener preferencesListener = key -> {
@@ -3047,32 +3068,11 @@ public class MainActivity extends StateActivity implements DrawerForm.Callback, 
 			pageCleanupCountDirty = true; pageCleanupDeletedDirty = true;
 			requestPageCleanup();
 		}
-		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
-			finishLocalToolbarMotion();
-			com.mishiranu.dashchan.widget.SurfaceMotion.updatePopupPolicies();
-			com.mishiranu.dashchan.widget.InterfaceAppearance.refreshTree(findViewById(android.R.id.content));
-			toolbarHolder.applyStandardAppearance();
-			com.mishiranu.dashchan.widget.PullLoadingIndicator.refreshTree(findViewById(android.R.id.content));
-			View toolbar = findViewById(R.id.toolbar);
-			if (toolbar instanceof com.mishiranu.dashchan.widget.CompactToolbar) {
-				((com.mishiranu.dashchan.widget.CompactToolbar) toolbar).refreshMotionPolicy();
-			}
-			if (toolbarExtra instanceof com.mishiranu.dashchan.widget.MotionToolbarExtra) {
-				((com.mishiranu.dashchan.widget.MotionToolbarExtra) toolbarExtra).updatePolicy();
-			}
-			if (expandedScreen != null) expandedScreen.updateMotionPolicy();
-			if (screenMotion != null) screenMotion.finish();
-			if (threadMotion != null) threadMotion.clear();
-			resetPredictiveBackView(false);
-			if (predictiveBack != null) predictiveBack.clear("motion_policy_changed");
-			if (drawerMotion != null) drawerMotion.updatePolicy();
-			prepareBackPreview();
-			updateSystemBackCallback();
-			if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
-				// Recreate all captured drawer surfaces/holders together (including the
-				// status-bar foreground and DrawerAppearance's original background).
-				recreate();
-			}
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
+			refreshBackMotionPolicy();
+			// Recreate all captured drawer surfaces/holders together (including the
+			// status-bar foreground and DrawerAppearance's original background).
+			recreate();
 		} else if (Preferences.KEY_POSTING_BACK_SINGLE_GESTURE.equals(key)) {
 			resetPredictiveBackView(false);
 			updateSystemBackCallback();

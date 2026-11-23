@@ -12,6 +12,7 @@ import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
 import com.mishiranu.dashchan.content.storage.AutohideStorage;
+import com.mishiranu.dashchan.content.storage.AutohideStorage.HideMode;
 import com.mishiranu.dashchan.text.SimilarTextEstimator;
 import com.mishiranu.dashchan.widget.ClickableToast;
 import java.io.IOException;
@@ -49,7 +50,13 @@ public class HidePerformer {
 		this.postsProvider = postsProvider;
 	}
 
-	public String checkHidden(Chan chan, PostItem postItem) {
+	private record RuleMatch(String reason, HideMode mode) {}
+
+	public boolean isResolved(PostItem postItem) {
+		return postItem.isHideStateResolved(autohideStorage.getRevision());
+	}
+
+	public void resolve(Chan chan, PostItem postItem) {
 		String message = checkHiddenByReplies(postItem);
 		if (message == null) {
 			message = checkHiddenByName(chan, postItem);
@@ -57,13 +64,15 @@ public class HidePerformer {
 		if (message == null) {
 			message = checkHiddenBySimilarPost(chan, postItem);
 		}
-		if (message == null) {
-			message = checkHiddenGlobalAutohide(chan, postItem);
+		RuleMatch rule = message == null || autohideStorage.getStrongestMode(postItem.isOriginalPost()) == HideMode.REMOVE
+				? checkHiddenGlobalAutohide(chan, postItem) : null;
+		HideMode mode = HideMode.INHERIT;
+		if (rule != null && (message == null || rule.mode == HideMode.REMOVE)) {
+			message = rule.reason;
+			mode = rule.mode;
 		}
-		if (message != null) {
-			return autohidePrefix + message;
-		}
-		return checkHiddenAIGenerated(chan, postItem);
+		message = message != null ? autohidePrefix + message : checkHiddenAIGenerated(chan, postItem);
+		postItem.setAutohideResult(message, mode, autohideStorage.getRevision());
 	}
 
 	private String checkHiddenAIGenerated(Chan chan, PostItem postItem) {
@@ -117,7 +126,7 @@ public class HidePerformer {
 		return null;
 	}
 
-	private String checkHiddenGlobalAutohide(Chan chan, PostItem postItem) {
+	private RuleMatch checkHiddenGlobalAutohide(Chan chan, PostItem postItem) {
 		String boardName = postItem.getBoardName();
 		PostNumber originalPostNumber = postItem.getOriginalPostNumber();
 		String originalPostNumberString = originalPostNumber != null
@@ -127,9 +136,14 @@ public class HidePerformer {
 		String subject = null;
 		String comment = null;
 		List<String> names = null;
+		RuleMatch match = null;
+		HideMode strongestMode = autohideStorage.getStrongestMode(originalPost);
 		ArrayList<AutohideStorage.AutohideItem> autohideItems = autohideStorage.getItems();
-		for (int i = 0; i < autohideItems.size(); i++) {
+		rules: for (int i = 0; i < autohideItems.size(); i++) {
+			if (match != null && match.mode == strongestMode) break;
 			AutohideStorage.AutohideItem autohideItem = autohideItems.get(i);
+			HideMode mode = autohideItem.hideMode;
+			if (match != null && mode.compareTo(match.mode) <= 0) continue;
 			// AND selection (only if chan, board, thread, scope, and sage match the rule)
 			if (autohideItem.chanNames == null || autohideItem.chanNames.contains(chan.name)) {
 				if (StringUtils.isEmpty(autohideItem.boardName) || boardName == null
@@ -145,8 +159,9 @@ public class HidePerformer {
 									subject = postItem.getSubject();
 								}
 								if ((result = autohideItem.find(subject)) != null) {
-									return autohideItem.getReason(AutohideStorage.AutohideItem
-											.ReasonSource.SUBJECT, comment, result);
+									match = new RuleMatch(autohideItem.getReason(AutohideStorage.AutohideItem
+											.ReasonSource.SUBJECT, comment, result), mode);
+									continue rules;
 								}
 							}
 							if (autohideItem.optionComment) {
@@ -154,8 +169,9 @@ public class HidePerformer {
 									comment = postItem.getComment(chan).toString();
 								}
 								if ((result = autohideItem.find(comment)) != null) {
-									return autohideItem.getReason(AutohideStorage.AutohideItem
-											.ReasonSource.COMMENT, comment, result);
+									match = new RuleMatch(autohideItem.getReason(AutohideStorage.AutohideItem
+											.ReasonSource.COMMENT, comment, result), mode);
+									continue rules;
 								}
 							}
 							if (autohideItem.optionName) {
@@ -174,8 +190,9 @@ public class HidePerformer {
 								}
 								for (String name : names) {
 									if ((result = autohideItem.find(name)) != null) {
-										return autohideItem.getReason(AutohideStorage.AutohideItem
-												.ReasonSource.NAME, name, result);
+										match = new RuleMatch(autohideItem.getReason(AutohideStorage.AutohideItem
+												.ReasonSource.NAME, name, result), mode);
+										continue rules;
 									}
 								}
 							}
@@ -183,8 +200,9 @@ public class HidePerformer {
 								for (AttachmentItem attachmentItem : postItem.getAttachmentItems()) {
 									String originalName = StringUtils.emptyIfNull(attachmentItem.getOriginalName());
 									if ((result = autohideItem.find(originalName)) != null) {
-										return autohideItem.getReason(AutohideStorage.AutohideItem
-												.ReasonSource.FILE, originalName, result);
+										match = new RuleMatch(autohideItem.getReason(AutohideStorage.AutohideItem
+												.ReasonSource.FILE, originalName, result), mode);
+										continue rules;
 									}
 								}
 							}
@@ -193,7 +211,7 @@ public class HidePerformer {
 				}
 			}
 		}
-		return null;
+		return match;
 	}
 
 	public enum AddResult {SUCCESS, FAIL, EXISTS}

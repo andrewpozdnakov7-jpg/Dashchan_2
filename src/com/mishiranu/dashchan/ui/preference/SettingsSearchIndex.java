@@ -87,9 +87,8 @@ public final class SettingsSearchIndex {
 		APPEARANCE(R.string.user_interface, R.string.appearance) {
 			@Override ContentFragment createFragment() { return new AppearanceSettingsFragment(); }
 		},
-		PREDICTIVE_BACK(R.string.user_interface, R.string.appearance, R.string.predictive_back_title) {
-			@Override ContentFragment createFragment() { return PredictiveBackSettingsFragment.isAvailable()
-					? new PredictiveBackSettingsFragment() : new AppearanceSettingsFragment(); }
+		BACK_GESTURES(R.string.user_interface, R.string.gesture_controls) {
+			@Override ContentFragment createFragment() { return new PredictiveBackSettingsFragment(); }
 		},
 		POST_LIST(R.string.user_interface, R.string.posts_list) {
 			@Override ContentFragment createFragment() { return new PostsListSettingsFragment(); }
@@ -176,6 +175,10 @@ public final class SettingsSearchIndex {
 		AUTOHIDE(R.string.autohide) {
 			@Override
 			ContentFragment createFragment() { return new AutohideFragment(); }
+		},
+		AUTOHIDE_SETTINGS(R.string.autohide, R.string.autohide_settings) {
+			@Override
+			ContentFragment createFragment() { return new AutohideSettingsFragment(); }
 		},
 		ABOUT(R.string.about) {
 			@Override
@@ -481,6 +484,7 @@ public final class SettingsSearchIndex {
 				R.string.hardware_video_acceleration__summary, Preferences.KEY_HARDWARE_VIDEO_ACCELERATION);
 		add(context, entries, Screen.EXPERIMENTAL, R.string.s24_ultra_oneui9_toolbar_fix,
 				R.string.s24_ultra_oneui9_toolbar_fix_summary, Preferences.KEY_S24_ULTRA_ONEUI9_TOOLBAR_FIX);
+		addExperimentalToggle(context, entries, ExperimentalPreferenceDescriptors.lenovoKeyboardFix());
 		add(context, entries, Screen.DIAGNOSTICS, R.string.crash_report_prompt_enabled,
 				R.string.crash_report_prompt_summary, Preferences.KEY_CRASH_REPORT_PROMPTS);
 		add(context, entries, Screen.CRASH_REPORTS, R.string.crash_reports_saved, R.string.crash_reports_saved_summary, null);
@@ -556,10 +560,11 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.APPEARANCE, R.string.day_theme, 0, Preferences.KEY_DAY_THEME);
 		add(context, entries, Screen.APPEARANCE, R.string.night_theme, 0, Preferences.KEY_NIGHT_THEME);
 		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
-			add(context, entries, Screen.APPEARANCE, R.string.predictive_back_title, R.string.predictive_back_settings_summary, null);
-			add(context, entries, Screen.PREDICTIVE_BACK, R.string.enable_predictive_back,
-					R.string.enable_predictive_back__summary, Preferences.KEY_PREDICTIVE_BACK);
-			add(context, entries, Screen.PREDICTIVE_BACK, R.string.posting_back_single_gesture,
+			add(context, entries, Screen.BACK_GESTURES, R.string.gesture_controls,
+					R.string.predictive_back_settings_summary, null);
+			add(context, entries, Screen.BACK_GESTURES, R.string.predictive_back_title,
+					R.string.predictive_back_settings_summary, null);
+			add(context, entries, Screen.BACK_GESTURES, R.string.posting_back_single_gesture,
 					R.string.posting_back_single_gesture_summary, Preferences.KEY_POSTING_BACK_SINGLE_GESTURE);
 		}
 		add(context, entries, Screen.GESTURES, R.string.gesture_controls, R.string.gesture_controls__summary, null);
@@ -567,7 +572,7 @@ public final class SettingsSearchIndex {
 		add(context, entries, Screen.NAVIGATION_DRAWER, R.string.initial_position, 0, Preferences.KEY_DRAWER_INITIAL_POSITION);
 		add(context, entries, Screen.INTERFACE, R.string.paged_board_navigation,
 				R.string.paged_board_navigation__summary, Preferences.KEY_PAGE_BY_PAGE);
-		add(context, entries, Screen.INTERFACE, R.string.remove_hidden_threads,
+		add(context, entries, Screen.AUTOHIDE_SETTINGS, R.string.remove_hidden_threads,
 				R.string.remove_hidden_threads__summary, Preferences.KEY_REMOVE_HIDDEN_THREADS);
 		add(context, entries, Screen.INTERFACE, R.string.hide_threads_with_swipe, 0,
 				Preferences.KEY_HIDE_THREADS_WITH_SWIPE);
@@ -575,7 +580,7 @@ public final class SettingsSearchIndex {
 				R.string.thread_quick_navigation__search_summary, Preferences.KEY_THREAD_QUICK_NAVIGATION);
 		add(context, entries, Screen.THREAD_NAVIGATION, R.string.thread_quick_navigation_transparency,
 				0, Preferences.KEY_THREAD_QUICK_NAVIGATION_TRANSPARENCY);
-		add(context, entries, Screen.POST_LIST, R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary,
+		add(context, entries, Screen.AUTOHIDE_SETTINGS, R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary,
 				Preferences.KEY_REMOVE_HIDDEN_POSTS);
 		add(context, entries, Screen.POST_LIST, R.string.display_post_year, 0, Preferences.KEY_DISPLAY_POST_YEAR);
 		add(context, entries, Screen.POST_LIST, R.string.hide_thread_title, R.string.hide_thread_title__summary,
@@ -770,6 +775,8 @@ public final class SettingsSearchIndex {
 				R.string.start_videos_muted__summary, Preferences.KEY_VIDEO_START_MUTED);
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.remember_last_video_position,
 				R.string.remember_last_video_position__summary, Preferences.KEY_REMEMBER_LAST_VIDEO_POSITION);
+		add(context, entries, Screen.MEDIA_PLAYER, R.string.ignore_audio_focus,
+				R.string.ignore_audio_focus__summary, Preferences.KEY_IGNORE_AUDIO_FOCUS);
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_audio_boost,
 				R.string.video_audio_boost__summary, Preferences.KEY_VIDEO_AUDIO_BOOST);
 		add(context, entries, Screen.MEDIA_PLAYER, R.string.video_audio_boost_level, 0,

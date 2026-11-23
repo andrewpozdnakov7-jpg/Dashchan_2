@@ -22,6 +22,14 @@ public class EditorHeightPolicyTest {
 		assertEquals(936, EditorHeightPolicy.keyboardInputHeight(1472, 24 + 32, 208 + 272, 368));
 		assertEquals(968, EditorHeightPolicy.keyboardInputHeight(1472, 24, 208 + 272, 368));
 	}
+	@Test public void keyboardOverlapCountsOnlyTheUnappliedPart() {
+		assertEquals(707, EditorHeightPolicy.keyboardOverlap(258, 2530, 1823));
+		assertEquals(77, EditorHeightPolicy.keyboardOverlap(258, 1900, 1823));
+		assertEquals(0, EditorHeightPolicy.keyboardOverlap(258, 1823, 1823));
+		assertEquals(0, EditorHeightPolicy.keyboardOverlap(258, 1750, 1823));
+		assertEquals(100, EditorHeightPolicy.keyboardOverlap(1900, 2000, 1823));
+	}
+
 	@Test public void adaptiveEditorRetainsEmptyFormHeightWithoutAttachments() {
 		assertEquals(800, EditorHeightPolicy.adaptiveAutomaticHeight(1000, 200, 0, 100, false));
 	}

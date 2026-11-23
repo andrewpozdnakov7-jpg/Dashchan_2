@@ -2,10 +2,12 @@ package com.mishiranu.dashchan.ui.preference;
 
 import com.mishiranu.dashchan.widget.MotionDialogBuilder;
 import android.app.AlertDialog;
+import android.graphics.Outline;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
@@ -18,6 +20,7 @@ import com.mishiranu.dashchan.ui.preference.core.PreferenceFragment;
 import com.mishiranu.dashchan.ui.preference.core.Preference;
 import com.mishiranu.dashchan.util.SharedPreferences;
 import com.mishiranu.dashchan.widget.CustomSearchView;
+import com.mishiranu.dashchan.widget.InterfaceAppearance;
 import com.mishiranu.dashchan.widget.MenuExpandListener;
 import java.util.List;
 
@@ -33,6 +36,29 @@ public class CategoriesFragment extends PreferenceFragment {
 	private boolean requestSearchInput;
 	private boolean restoringSearch;
 	private SearchNavigation searchNavigation;
+	private IndexToolbarOutline indexOutline;
+
+	/** Clear only the cast shadow, not the shape, Z order or themed background of the shared bar. */
+	private static final class IndexToolbarOutline extends ViewOutlineProvider {
+		private final View bar;
+		private final ViewOutlineProvider original;
+
+		IndexToolbarOutline(View bar) {
+			this.bar = bar;
+			original = bar.getOutlineProvider();
+		}
+
+		@Override public void getOutline(View view, Outline outline) {
+			original.getOutline(view, outline);
+			outline.setAlpha(0f);
+		}
+
+		void setFlat(boolean flat) {
+			ViewOutlineProvider current = bar.getOutlineProvider();
+			if (flat && current == original) bar.setOutlineProvider(this);
+			else if (!flat && current == this) bar.setOutlineProvider(original);
+		}
+	}
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -65,6 +91,7 @@ public class CategoriesFragment extends PreferenceFragment {
 	}
 
 	private void populatePreferences() {
+		if (indexOutline != null) indexOutline.setFlat(searchQuery == null);
 		removeAllPreferences();
 		if (searchQuery != null) {
 			List<SettingsSearchIndex.Entry> results = SettingsSearchIndex.search(searchIndex, searchQuery);
@@ -88,39 +115,46 @@ public class CategoriesFragment extends PreferenceFragment {
 			return;
 		}
 
-		addCategory(R.string.general, R.drawable.ic_map)
+		addSettingsIndexCategory(R.string.general, R.drawable.ic_map, R.drawable.ic_settings_home_general)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new GeneralFragment()));
 		if (BuildConfig.ENABLE_APP_SECURITY_SETTINGS) {
-			addCategory(R.string.security_title, R.drawable.ic_verified)
+			addSettingsIndexCategory(R.string.security_title, R.drawable.ic_verified,
+					R.drawable.ic_settings_home_security)
 					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 							.pushFragment(new SecurityFragment()));
 		}
-		addCategory(R.string.forums, R.drawable.ic_public)
+		addSettingsIndexCategory(R.string.forums, R.drawable.ic_public, R.drawable.ic_settings_home_forums)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ChansFragment()));
-		addCategory(R.string.experimental_features, R.drawable.ic_verified)
+		addSettingsIndexCategory(R.string.experimental_features, R.drawable.ic_verified,
+				R.drawable.ic_settings_home_experiments)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ExperimentalFragment()));
-		addCategory(R.string.user_interface, R.drawable.ic_color_lens)
+		addSettingsIndexCategory(R.string.user_interface, R.drawable.ic_color_lens,
+				R.drawable.ic_settings_home_interface)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new InterfaceFragment()));
-		addCategory(R.string.contents, R.drawable.ic_local_library)
+		addSettingsIndexCategory(R.string.contents, R.drawable.ic_local_library,
+				R.drawable.ic_settings_home_contents)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new ContentsFragment()));
-		addCategory(R.string.media, R.drawable.ic_save)
+		addSettingsIndexCategory(R.string.media, R.drawable.ic_save, R.drawable.ic_settings_home_media)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new MediaFragment()));
-		addCategory(R.string.autohide, R.drawable.ic_custom_fork)
+		addSettingsIndexCategory(R.string.autohide, R.drawable.ic_custom_fork,
+				R.drawable.ic_settings_home_autohide)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AutohideFragment()));
-		addCategory(R.string.custom_application_shortcut, R.drawable.ic_camera_alt)
+		addSettingsIndexCategory(R.string.custom_application_shortcut, R.drawable.ic_camera_alt,
+				R.drawable.ic_settings_home_shortcut)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new CustomShortcutFragment()));
-		addCategory(R.string.accessibility, R.drawable.ic_accessibility)
+		addSettingsIndexCategory(R.string.accessibility, R.drawable.ic_accessibility,
+				R.drawable.ic_settings_home_accessibility)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AccessibilityFragment()));
-		addCategory(R.string.about, R.drawable.ic_info)
+		addSettingsIndexCategory(R.string.about, R.drawable.ic_info, R.drawable.ic_settings_home_about)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new AboutFragment()));
 	}
@@ -227,6 +261,38 @@ public class CategoriesFragment extends PreferenceFragment {
 						if (getView() != null) populatePreferences();
 					}).show();
 		});
+	}
+
+	@Override
+	public void onStart() {
+		super.onStart();
+		if (InterfaceAppearance.isEnabled(requireContext())) {
+			View bar = requireActivity().findViewById(R.id.toolbar_layout);
+			if (bar != null && bar.getOutlineProvider() != null) {
+				indexOutline = new IndexToolbarOutline(bar);
+				indexOutline.setFlat(searchQuery == null);
+			}
+		}
+	}
+
+	private void releaseIndexOutline() {
+		if (indexOutline != null) {
+			indexOutline.setFlat(false);
+			indexOutline = null;
+		}
+	}
+
+	@Override
+	public void onTerminate() {
+		// MainActivity transfers its toolbar before the outgoing view can be destroyed.
+		releaseIndexOutline();
+		super.onTerminate();
+	}
+
+	@Override
+	public void onStop() {
+		releaseIndexOutline();
+		super.onStop();
 	}
 
 	@Override

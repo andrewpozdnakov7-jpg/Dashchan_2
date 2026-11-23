@@ -8,6 +8,7 @@ import androidx.annotation.RequiresApi;
 import com.mishiranu.dashchan.content.Preferences;
 import com.mishiranu.dashchan.util.InterfaceMotion;
 import com.mishiranu.dashchan.util.SharedPreferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
 import com.mishiranu.dashchan.widget.PredictiveBackMotion;
 
 /** User close may animate; forced dismissal always tears down immediately. */
@@ -17,13 +18,17 @@ public final class AttachmentGridDialog extends com.mishiranu.dashchan.content.s
 	private int callbackGeneration;
 	private boolean started, cancelable = true, backGestureStarted, backGestureIme, backInvocationHandled;
 	private final Runnable releaseBackInvocation = () -> backInvocationHandled = false;
+	private final Runnable navigationModeChanged = this::refreshPredictiveBack;
 	private final SharedPreferences.Listener motionPreferencesListener = key -> {
-		if (Preferences.KEY_PREDICTIVE_BACK.equals(key) || Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) {
-			unregisterPredictiveBack(); backGestureStarted = false;
-			if (motion != null) motion.finish();
-			if (started) registerPredictiveBack();
-		}
+		if (Preferences.KEY_NEW_INTERFACE_MOTION.equals(key)) refreshPredictiveBack();
 	};
+
+	private void refreshPredictiveBack() {
+		unregisterPredictiveBack();
+		backGestureStarted = false;
+		if (motion != null) motion.finish();
+		if (started) registerPredictiveBack();
+	}
 
 	public AttachmentGridDialog(Context context, int theme) { super(context, theme); }
 
@@ -37,6 +42,7 @@ public final class AttachmentGridDialog extends com.mishiranu.dashchan.content.s
 	@Override protected void onStart() {
 		super.onStart(); started = true; backGestureStarted = backInvocationHandled = false;
 		Preferences.PREFERENCES.register(motionPreferencesListener);
+		SystemNavigationMode.addListener(navigationModeChanged);
 		registerPredictiveBack();
 		if (motion != null) motion.open();
 	}
@@ -109,6 +115,7 @@ public final class AttachmentGridDialog extends com.mishiranu.dashchan.content.s
 	@Override protected void onStop() {
 		started = false; backGestureStarted = false;
 		Preferences.PREFERENCES.unregister(motionPreferencesListener);
+		SystemNavigationMode.removeListener(navigationModeChanged);
 		unregisterPredictiveBack(); getWindow().getDecorView().removeCallbacks(releaseBackInvocation);
 		if (motion != null) motion.dispose();
 		super.onStop();

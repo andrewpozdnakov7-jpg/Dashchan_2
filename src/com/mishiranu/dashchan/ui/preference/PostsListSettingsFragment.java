@@ -32,8 +32,6 @@ public class PostsListSettingsFragment extends PreferenceFragment {
 						.pushFragment(new ThreadQuickNavigationFragment()));
 		addCheck(true, Preferences.KEY_SWIPE_REPLY, Preferences.DEFAULT_SWIPE_REPLY,
 				R.string.swipe_reply, R.string.swipe_reply__summary);
-		addCheck(true, Preferences.KEY_REMOVE_HIDDEN_POSTS, Preferences.DEFAULT_REMOVE_HIDDEN_POSTS,
-				R.string.remove_hidden_posts, R.string.remove_hidden_posts__summary);
 		addCheck(true, Preferences.KEY_DISPLAY_POST_YEAR, Preferences.DEFAULT_DISPLAY_POST_YEAR,
 				R.string.display_post_year, 0).setOnAfterChangeListener(p -> requireActivity().recreate());
 		addCheck(true, Preferences.KEY_HIDE_THREAD_TITLE, Preferences.DEFAULT_HIDE_THREAD_TITLE,

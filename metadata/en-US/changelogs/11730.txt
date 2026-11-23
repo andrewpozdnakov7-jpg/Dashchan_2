@@ -1,0 +1,7 @@
+- Updated the Material 3 settings home screen with outlined icons, labels closer to their icons and no shadow below the top bar.
+- Each auto-hide rule can now collapse matches, hide them completely or follow the global setting. The saved mode appears in the rules list.
+- Predictive Back is enabled automatically with Android gesture navigation. The single-gesture exit setting for the reply form moved to Interface → Gestures.
+- Sharing a photo or video from the gallery to Slooop now attaches it to the next reply form you open that has room for an attachment.
+- Video player settings now include Ignore audio focus, so Slooop can play video while another app plays music.
+- Fixed the keyboard covering the bottom buttons in the reply form. The Lenovo TB320FC fix is on by default.
+- Restored the proportions of the favorite-thread counter in the classic sidebar.

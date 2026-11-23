@@ -280,18 +280,13 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	private final UiManager.PostStateProvider postStateProvider = new UiManager.PostStateProvider() {
 		@Override
 		public boolean isHiddenResolve(PostItem postItem) {
-			if (postItem.getHideState() == PostItem.HideState.UNDEFINED) {
+			if (!hidePerformer.isResolved(postItem)) {
 				RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
 				PostItem.HideState hideState = retainableExtra.hiddenThreads.get(postItem.getThreadNumber());
 				if (hideState != PostItem.HideState.UNDEFINED) {
 					postItem.setHidden(hideState, null);
 				} else {
-					String hideReason = hidePerformer.checkHidden(getChan(), postItem);
-					if (hideReason != null) {
-						postItem.setHidden(PostItem.HideState.HIDDEN, hideReason);
-					} else {
-						postItem.setHidden(PostItem.HideState.SHOWN, null);
-					}
+					hidePerformer.resolve(getChan(), postItem);
 				}
 			}
 			return postItem.getHideState().hidden;
@@ -482,8 +477,17 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 		super.onResume();
 		pageActive = true;
 		if (hideSwipe != null) hideSwipe.resume();
-		getAdapter().setSearchActive(true);
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
+		ThreadsAdapter adapter = getAdapter();
+		if (!retainableExtra.cachedPostItems.isEmpty() && adapter.hasHideFilterChanged()) {
+			adapter.setItems(retainableExtra.pendingThreadsUpdate
+					? retainableExtra.publishedPostItems : retainableExtra.cachedPostItems,
+					retainableExtra.startPageNumber == PAGE_NUMBER_CATALOG);
+			if (!getViewModel(ReadViewModel.class).hasTaskOrValue() && hasRemovedHiddenThreads(retainableExtra)) {
+				requestHiddenThreadsAutoFill(false);
+			}
+		}
+		adapter.setSearchActive(true);
 		if (retainableExtra.dialogsState != null) {
 			retainableExtra.dialogsState.dropState();
 			retainableExtra.dialogsState = null;
@@ -1054,7 +1058,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private boolean hasRemovedHiddenThreads(RetainableExtra retainableExtra) {
-		if (Preferences.isDisplayHiddenThreads()) {
+		if (!ThreadsAdapter.mayRemoveHiddenThreads()) {
 			return false;
 		}
 		int cachedThreadsCount = 0;
@@ -1065,10 +1069,16 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 	}
 
 	private int countVisibleCachedThreads(RetainableExtra extra) {
+		boolean removeByDefault = Preferences.isRemoveHiddenThreads();
+		boolean mayRemove = ThreadsAdapter.mayRemoveHiddenThreads();
 		int count = 0;
 		for (List<PostItem> page : extra.cachedPostItems) {
+			if (!mayRemove) {
+				count += page.size();
+				continue;
+			}
 			for (PostItem postItem : page) {
-				if (Preferences.isDisplayHiddenThreads() || !postStateProvider.isHiddenResolve(postItem)) count++;
+				if (!postStateProvider.isRemovedResolve(postItem, removeByDefault)) count++;
 			}
 		}
 		return count;
@@ -1088,7 +1098,7 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 
 	private void continueHiddenThreadsAutoFill() {
 		RetainableExtra retainableExtra = getRetainableExtra(RetainableExtra.FACTORY);
-		if (!retainableExtra.autoFillRequested || Preferences.isDisplayHiddenThreads() ||
+		if (!retainableExtra.autoFillRequested || !hasRemovedHiddenThreads(retainableExtra) ||
 				Preferences.isPageByPage() || retainableExtra.startPageNumber < 0 ||
 				retainableExtra.visibleThreadsTarget <= 0) {
 			finishHiddenThreadsAutoFill(false);

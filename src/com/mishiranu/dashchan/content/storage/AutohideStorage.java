@@ -27,6 +27,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 	private static final String KEY_OPTION_NAME = "optionName";
 	private static final String KEY_OPTION_FILE_NAME = "optionFileName";
 	private static final String KEY_MATCH_MODE = "matchMode";
+	private static final String KEY_HIDE_MODE = "hideMode";
 	private static final String KEY_VALUE = "value";
 	private static final String VALUE_MATCH_MODE_LITERAL = "literal";
 
@@ -37,6 +38,9 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 	}
 
 	private final ArrayList<AutohideItem> autohideItems = new ArrayList<>();
+	private long revision;
+	private HideMode strongestOriginalPostMode = HideMode.COLLAPSE;
+	private HideMode strongestReplyMode = HideMode.COLLAPSE;
 
 	private AutohideStorage() {
 		super("autohide", 1000, 10000);
@@ -45,6 +49,62 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 
 	public ArrayList<AutohideItem> getItems() {
 		return autohideItems;
+	}
+
+	public long getRevision() {
+		return revision;
+	}
+
+	public boolean hasFullHideRules() {
+		return strongestOriginalPostMode == HideMode.REMOVE || strongestReplyMode == HideMode.REMOVE;
+	}
+
+	public HideMode getStrongestMode(boolean originalPost) {
+		return originalPost ? strongestOriginalPostMode : strongestReplyMode;
+	}
+
+	private void rulesChanged() {
+		strongestOriginalPostMode = HideMode.COLLAPSE;
+		strongestReplyMode = HideMode.COLLAPSE;
+		for (AutohideItem item : autohideItems) {
+			if (item.optionOriginalPost && item.hideMode.compareTo(strongestOriginalPostMode) > 0) {
+				strongestOriginalPostMode = item.hideMode;
+			}
+			if (item.optionReplies && item.hideMode.compareTo(strongestReplyMode) > 0) {
+				strongestReplyMode = item.hideMode;
+			}
+			if (strongestOriginalPostMode == HideMode.REMOVE && strongestReplyMode == HideMode.REMOVE) break;
+		}
+		revision++;
+	}
+
+	public enum HideMode {
+		// Ordered by their effect for either value of the global default.
+		COLLAPSE("collapse", 1), INHERIT("", 0), REMOVE("remove", 2);
+
+		private final String value;
+		private final int parcelCode;
+
+		HideMode(String value, int parcelCode) {
+			this.value = value;
+			this.parcelCode = parcelCode;
+		}
+
+		public boolean removes(boolean removeByDefault) {
+			return this == REMOVE || this == INHERIT && removeByDefault;
+		}
+
+		private static HideMode fromValue(String value) {
+			if (COLLAPSE.value.equals(value)) return COLLAPSE;
+			if (REMOVE.value.equals(value)) return REMOVE;
+			return INHERIT;
+		}
+
+		private static HideMode fromParcelCode(int value) {
+			if (value == COLLAPSE.parcelCode) return COLLAPSE;
+			if (value == REMOVE.parcelCode) return REMOVE;
+			return INHERIT;
+		}
 	}
 
 	@Override
@@ -99,12 +159,15 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 							jsonObject.optString(KEY_MATCH_MODE, null))
 							? AutohideItem.MatchMode.LITERAL : AutohideItem.MatchMode.REGEX;
 					String value = jsonObject.optString(KEY_VALUE, null);
-					autohideItems.add(new AutohideItem(chanNames, boardName, threadNumber, optionOriginalPost,
+					AutohideItem item = new AutohideItem(chanNames, boardName, threadNumber, optionOriginalPost,
 							optionReplies, optionSage, optionSubject, optionComment, optionName, optionFileName,
-							matchMode, value));
+							matchMode, value);
+					item.hideMode = HideMode.fromValue(jsonObject.optString(KEY_HIDE_MODE, null));
+					autohideItems.add(item);
 				}
 			}
 		}
+		rulesChanged();
 	}
 
 	@Override
@@ -133,6 +196,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				if (autohideItem.matchMode == AutohideItem.MatchMode.LITERAL) {
 					jsonObject.put(KEY_MATCH_MODE, VALUE_MATCH_MODE_LITERAL);
 				}
+				putJson(jsonObject, KEY_HIDE_MODE, autohideItem.hideMode.value);
 				putJson(jsonObject, KEY_VALUE, autohideItem.value);
 				jsonArray.put(jsonObject);
 			}
@@ -157,16 +221,19 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 
 	public void add(AutohideItem autohideItem) {
 		autohideItems.add(autohideItem);
+		rulesChanged();
 		serialize();
 	}
 
 	public void update(int index, AutohideItem autohideItem) {
 		autohideItems.set(index, autohideItem);
+		rulesChanged();
 		serialize();
 	}
 
 	public void setScope(int index, AutohideItem.Scope scope, boolean enabled) {
 		autohideItems.get(index).setScope(scope, enabled);
+		rulesChanged();
 		serialize();
 	}
 
@@ -174,11 +241,13 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 		for (AutohideItem autohideItem : autohideItems) {
 			autohideItem.setScope(scope, enabled);
 		}
+		rulesChanged();
 		serialize();
 	}
 
 	public void delete(int index) {
 		autohideItems.remove(index);
+		rulesChanged();
 		serialize();
 	}
 
@@ -199,6 +268,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 
 		public MatchMode matchMode;
 		public String value;
+		public HideMode hideMode = HideMode.INHERIT;
 
 		private volatile boolean ready = false;
 		private Pattern pattern;
@@ -212,6 +282,7 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 					autohideItem.optionOriginalPost, autohideItem.optionReplies, autohideItem.optionSage,
 					autohideItem.optionSubject, autohideItem.optionComment, autohideItem.optionName,
 					autohideItem.optionFileName, autohideItem.matchMode, autohideItem.value);
+			hideMode = autohideItem.hideMode;
 		}
 
 		public AutohideItem(HashSet<String> chanNames, String boardName, String threadNumber,
@@ -342,7 +413,8 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 			dest.writeByte((byte) (optionName ? 1 : 0));
 			dest.writeByte((byte) (optionFileName ? 1 : 0));
 			dest.writeString(value);
-			dest.writeByte((byte) (matchMode == MatchMode.LITERAL ? 1 : 0));
+			// Preserve the existing parcel layout. Bit zero stores the match mode.
+			dest.writeByte((byte) ((matchMode == MatchMode.LITERAL ? 1 : 0) | (hideMode.parcelCode << 1)));
 		}
 
 		public static final Creator<AutohideItem> CREATOR = new Creator<AutohideItem>() {
@@ -364,7 +436,9 @@ public class AutohideStorage extends StorageManager.JsonOrgStorage<List<Autohide
 				autohideItem.optionName = source.readByte() != 0;
 				autohideItem.optionFileName = source.readByte() != 0;
 				autohideItem.value = StringUtils.emptyIfNull(source.readString());
-				autohideItem.matchMode = source.readByte() != 0 ? MatchMode.LITERAL : MatchMode.REGEX;
+				int modes = source.readByte() & 0xff;
+				autohideItem.matchMode = (modes & 1) != 0 ? MatchMode.LITERAL : MatchMode.REGEX;
+				autohideItem.hideMode = HideMode.fromParcelCode(modes >>> 1);
 				return autohideItem;
 			}
 

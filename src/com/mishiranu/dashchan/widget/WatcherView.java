@@ -28,8 +28,8 @@ import com.mishiranu.dashchan.util.ResourceUtils;
 
 @SuppressLint("ViewConstructor")
 public class WatcherView extends FrameLayout {
-	// Visible legacy badge, not the hit target. Previously these were implicit in a 48x36 row.
-	private static final int LEGACY_CAPSULE_WIDTH = 32, LEGACY_CAPSULE_MIN_HEIGHT = 12;
+	// Classic badge: a 48 dp target with 8 dp side insets and 12 dp top/bottom insets at normal scale.
+	private static final int LEGACY_CAPSULE_WIDTH = 32, LEGACY_CAPSULE_MIN_HEIGHT = 24;
 	public static class ColorSet {
 		public final int enabledColor;
 		public final int unavailableColor;

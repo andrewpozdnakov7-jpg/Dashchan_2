@@ -7,7 +7,6 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.mishiranu.dashchan.BuildConfig;
-import com.mishiranu.dashchan.content.Preferences;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -32,8 +31,12 @@ public final class SystemNavigationMode {
 				|| navigation.right > 0 && tappable.right > 0 || navigation.bottom > 0 && tappable.bottom > 0;
 		return buttons ? Mode.BUTTONS : Mode.GESTURES;
 	}
-	static boolean shouldAutoEnable(int api, boolean available, Mode detected, boolean hasChoice) {
-		return api >= 33 && available && detected == Mode.GESTURES && !hasChoice;
+	public static boolean isPredictiveBackEnabled() {
+		return supportsPredictiveBack(Build.VERSION.SDK_INT, BuildConfig.ENABLE_PREDICTIVE_BACK, mode);
+	}
+
+	static boolean supportsPredictiveBack(int api, boolean available, Mode detected) {
+		return api >= Build.VERSION_CODES.TIRAMISU && available && detected == Mode.GESTURES;
 	}
 
 	public static void refresh(View root) {
@@ -45,14 +48,13 @@ public final class SystemNavigationMode {
 		Insets tap = Build.VERSION.SDK_INT >= 30 ? insets.getInsetsIgnoringVisibility(tapType) : insets.getInsets(tapType);
 		Mode detected = classify(nav, tap, insets.getInsets(WindowInsetsCompat.Type.systemGestures()));
 		if (detected == Mode.UNKNOWN) return; // Preserve the last known mode through transient zero insets.
-		boolean changed = mode != detected;
+		updateMode(detected);
+	}
+
+	static void updateMode(Mode detected) {
+		if (mode == detected) return;
 		mode = detected;
-		if (shouldAutoEnable(Build.VERSION.SDK_INT, BuildConfig.ENABLE_PREDICTIVE_BACK, detected,
-				Preferences.PREFERENCES.contains(Preferences.KEY_PREDICTIVE_BACK))) {
-			// Absence means automatic default. An explicit false/true is never overwritten.
-			Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, true).close();
-		}
-		if (changed) for (Runnable listener : new ArrayList<>(listeners)) listener.run();
+		for (Runnable listener : new ArrayList<>(listeners)) listener.run();
 	}
 
 	public static final class Observer implements ViewTreeObserver.OnGlobalLayoutListener, AutoCloseable {

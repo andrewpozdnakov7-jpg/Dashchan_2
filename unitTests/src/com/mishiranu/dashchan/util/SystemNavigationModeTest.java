@@ -23,12 +23,12 @@ public class SystemNavigationModeTest {
 		assertEquals(SystemNavigationMode.Mode.GESTURES, SystemNavigationMode.classify(
 				Insets.of(0, 0, 0, 64), Insets.of(0, 100, 0, 0), Insets.of(0, 100, 0, 64)));
 	}
-	@Test public void automaticDefaultNeverOverridesAnExistingChoiceOrUnsupportedMode() {
-		assertTrue(SystemNavigationMode.shouldAutoEnable(33, true, SystemNavigationMode.Mode.GESTURES, false));
-		assertFalse(SystemNavigationMode.shouldAutoEnable(36, true, SystemNavigationMode.Mode.GESTURES, true));
-		assertFalse(SystemNavigationMode.shouldAutoEnable(36, true, SystemNavigationMode.Mode.BUTTONS, false));
-		assertFalse(SystemNavigationMode.shouldAutoEnable(36, true, SystemNavigationMode.Mode.UNKNOWN, false));
-		assertFalse(SystemNavigationMode.shouldAutoEnable(32, true, SystemNavigationMode.Mode.GESTURES, false));
-		assertFalse(SystemNavigationMode.shouldAutoEnable(36, false, SystemNavigationMode.Mode.GESTURES, false));
+	@Test public void predictiveBackRequiresSupportedAndroidAndSystemGestures() {
+		assertTrue(SystemNavigationMode.supportsPredictiveBack(33, true, SystemNavigationMode.Mode.GESTURES));
+		assertTrue(SystemNavigationMode.supportsPredictiveBack(36, true, SystemNavigationMode.Mode.GESTURES));
+		assertFalse(SystemNavigationMode.supportsPredictiveBack(36, true, SystemNavigationMode.Mode.BUTTONS));
+		assertFalse(SystemNavigationMode.supportsPredictiveBack(36, true, SystemNavigationMode.Mode.UNKNOWN));
+		assertFalse(SystemNavigationMode.supportsPredictiveBack(32, true, SystemNavigationMode.Mode.GESTURES));
+		assertFalse(SystemNavigationMode.supportsPredictiveBack(36, false, SystemNavigationMode.Mode.GESTURES));
 	}
 }

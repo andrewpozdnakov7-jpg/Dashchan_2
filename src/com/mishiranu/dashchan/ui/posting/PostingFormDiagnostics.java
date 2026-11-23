@@ -70,7 +70,7 @@ public final class PostingFormDiagnostics {
 				+ " sdk=" + Build.VERSION.SDK_INT + " manufacturer=" + Build.MANUFACTURER
 				+ " model=" + Build.MODEL + " targetSdk=" + context.getApplicationInfo().targetSdkVersion
 				+ " systemNavigation=" + com.mishiranu.dashchan.util.SystemNavigationMode.get()
-				+ " predictiveBack=" + Preferences.isPredictiveBackEnabled()
+				+ " predictiveBack=" + com.mishiranu.dashchan.util.InterfaceMotion.isPredictiveBackEnabled()
 				+ " postingSingleGesture=" + Preferences.isPostingBackSingleGestureEnabled()
 				+ "\nstartedUtcMillis=" + System.currentTimeMillis()
 				+ "\nlimits: ringChars=" + MAX_CHARS + " sampleMs=50 treeMs=250 attachmentNodes=96 eventsPerSecond=160 screenSampleMs=250 screenPollMs=500 screenNodes=48 themeScanNodes=512 themeRows=16"

@@ -13,6 +13,8 @@ import androidx.test.filters.SdkSuppress;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
+import com.mishiranu.dashchan.util.SystemNavigationModeFixture;
 import com.mishiranu.dashchan.widget.AttachmentView;
 import com.mishiranu.dashchan.widget.StandardContentTestActivity;
 import java.lang.reflect.Field;
@@ -54,7 +56,7 @@ public class AttachmentGridPredictiveBackTest {
 		}
 	}
 	private static final class Harness implements AutoCloseable {
-		final Object predictive = Preferences.PREFERENCES.getAll().get(Preferences.KEY_PREDICTIVE_BACK);
+		final SystemNavigationMode.Mode navigation = SystemNavigationMode.get();
 		final Object material = Preferences.PREFERENCES.getAll().get(Preferences.KEY_NEW_INTERFACE_MOTION);
 		final ActivityScenario<StandardContentTestActivity> scenario;
 		Fixture fixture;
@@ -63,8 +65,8 @@ public class AttachmentGridPredictiveBackTest {
 			ActivityScenario<StandardContentTestActivity> created = null;
 			try {
 				InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-					Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, true)
-							.put(Preferences.KEY_NEW_INTERFACE_MOTION, true).close();
+					SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
+					Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, true).close();
 				});
 				created = ActivityScenario.launch(StandardContentTestActivity.class); scenario = created;
 				scenario.onActivity(a -> fixture = new Fixture(a)); idle();
@@ -81,8 +83,7 @@ public class AttachmentGridPredictiveBackTest {
 		}
 		private void restorePreferences() {
 			InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-					if (predictive instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, (Boolean) predictive).close();
-					else Preferences.PREFERENCES.edit().remove(Preferences.KEY_PREDICTIVE_BACK).close();
+					SystemNavigationModeFixture.setMode(navigation);
 					if (material instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_NEW_INTERFACE_MOTION, (Boolean) material).close();
 					else Preferences.PREFERENCES.edit().remove(Preferences.KEY_NEW_INTERFACE_MOTION).close();
 			});
@@ -126,7 +127,7 @@ public class AttachmentGridPredictiveBackTest {
 		}
 		try (Harness h = new Harness()) {
 			h.ui(f -> {
-				Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, false).close();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.BUTTONS);
 				Object back = callback(f.dialog); assertFalse(back instanceof OnBackAnimationCallback);
 				((android.window.OnBackInvokedCallback) back).onBackInvoked(); f.dialog.onWindowFocusChanged(false);
 			});

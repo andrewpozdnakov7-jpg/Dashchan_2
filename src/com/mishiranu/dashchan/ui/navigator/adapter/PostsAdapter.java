@@ -30,6 +30,7 @@ import com.mishiranu.dashchan.content.model.GalleryItem;
 import com.mishiranu.dashchan.content.model.Post;
 import com.mishiranu.dashchan.content.model.PostItem;
 import com.mishiranu.dashchan.content.model.PostNumber;
+import com.mishiranu.dashchan.content.storage.AutohideStorage;
 import com.mishiranu.dashchan.content.translation.TranslationController;
 import com.mishiranu.dashchan.ui.navigator.manager.UiManager;
 import com.mishiranu.dashchan.ui.navigator.manager.ViewUnit;
@@ -125,6 +126,8 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	private int bumpLimitOrdinalIndex = PostItem.ORDINAL_INDEX_NONE;
 	private boolean selection = false;
 	private boolean removeHiddenPosts = false;
+	private long hideRulesRevision = AutohideStorage.getInstance().hasFullHideRules()
+			? -1 : AutohideStorage.getInstance().getRevision();
 
 	public PostsAdapter(Callback callback, String chanName, UiManager uiManager, Replyable replyable,
 			UiManager.PostStateProvider postStateProvider, FragmentManager fragmentManager, RecyclerView recyclerView,
@@ -380,12 +383,12 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	private void rebuildPosts(boolean filterHidden) {
 		postNumbers.clear();
 		gallerySet.clear();
+		boolean remove = filterHidden && mayRemoveHiddenPosts();
 		for (PostItem postItem : postItemsMap.values()) {
 			if (postItem.isOriginalPost()) {
 				gallerySet.setThreadTitle(postItem.getSubjectOrComment());
 			}
-			boolean hidden = removeHiddenPosts && filterHidden
-					&& configurationSet.postStateProvider.isHiddenResolve(postItem);
+			boolean hidden = remove && configurationSet.postStateProvider.isRemovedResolve(postItem, removeHiddenPosts);
 			if (!hidden || postItem.isOriginalPost()) {
 				postNumbers.add(postItem.getPostNumber());
 			}
@@ -404,10 +407,12 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public boolean setRemoveHiddenPosts(boolean removeHiddenPosts) {
-		if (this.removeHiddenPosts == removeHiddenPosts) {
+		long revision = AutohideStorage.getInstance().getRevision();
+		if (this.removeHiddenPosts == removeHiddenPosts && hideRulesRevision == revision) {
 			return false;
 		}
 		this.removeHiddenPosts = removeHiddenPosts;
+		hideRulesRevision = revision;
 		cancelPreloading();
 		if (isWindowed()) {
 			notifyDataSetChanged();
@@ -421,7 +426,7 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 	}
 
 	public boolean refreshHiddenVisibility() {
-		if (!removeHiddenPosts) {
+		if (!mayRemoveHiddenPosts()) {
 			return false;
 		}
 		cancelPreloading();
@@ -433,6 +438,10 @@ public class PostsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 		rebuildPosts(true);
 		preloadPosts(0);
 		return true;
+	}
+
+	private boolean mayRemoveHiddenPosts() {
+		return removeHiddenPosts || AutohideStorage.getInstance().hasFullHideRules();
 	}
 
 	@Override

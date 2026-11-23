@@ -34,9 +34,7 @@ public final class InterfaceMotion {
 	}
 
 	public static boolean isPredictiveBackEnabled() {
-		// Appearance and predictive Back are separate user choices.
-		return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-				Preferences.isPredictiveBackEnabled() && SystemNavigationMode.get() != SystemNavigationMode.Mode.BUTTONS;
+		return SystemNavigationMode.isPredictiveBackEnabled();
 	}
 
 	public static int duration(int duration) {

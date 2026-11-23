@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.ui;
 
 import static org.junit.Assert.*;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
+import com.mishiranu.dashchan.util.SystemNavigationModeFixture;
 import android.animation.ValueAnimator;
 import android.graphics.Bitmap;
 import android.os.SystemClock;
@@ -22,12 +24,11 @@ public class PredictiveStage23ControllerTest {
 	private static Bitmap image() { return Bitmap.createBitmap(20, 40, Bitmap.Config.ARGB_8888); }
 	@Test public void liveStartProgressAndRedrawDoNotCaptureAndConfirmationFreezesExactlyOnce() {
 		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && ValueAnimator.areAnimatorsEnabled());
-		String key = com.mishiranu.dashchan.content.Preferences.KEY_PREDICTIVE_BACK;
-		Object old = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll().get(key);
+		SystemNavigationMode.Mode old = SystemNavigationMode.get();
 		FrameLayout[] host = {null}; PredictiveBackController[] controller = {null}; int[] captures = {0};
 		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
 			scenario.onActivity(a -> {
-				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().put(key, true).close();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				host[0] = new PredictiveBackLayout(a); host[0].setBackgroundColor(android.graphics.Color.RED); a.setContentView(host[0]);
 			});
 			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
@@ -60,19 +61,16 @@ public class PredictiveStage23ControllerTest {
 				assertTrue(invalidated[0].isRecycled()); assertFalse(late[0].isBusy()); late[0].close();
 			});
 		} finally {
-			try (com.mishiranu.dashchan.util.SharedPreferences.Editor editor = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
-				if (old instanceof Boolean) editor.put(key, (Boolean) old); else editor.remove(key);
-			}
+			SystemNavigationModeFixture.setMode(old);
 		}
 	}
 	@Test public void twentyPagesAreRetainedAndMemoryTrimCannotRecycleTheActiveDestination() {
 		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && ValueAnimator.areAnimatorsEnabled());
-		String key = com.mishiranu.dashchan.content.Preferences.KEY_PREDICTIVE_BACK;
-		Object old = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll().get(key);
+		SystemNavigationMode.Mode old = SystemNavigationMode.get();
 		PredictiveBackLayout[] host = {null};
 		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
 			scenario.onActivity(a -> {
-				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().put(key, true).close();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				host[0] = new PredictiveBackLayout(a); a.setContentView(host[0]);
 			});
 			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
@@ -103,19 +101,16 @@ public class PredictiveStage23ControllerTest {
 				assertEquals(before, BackPreviewBudget.usedBytes());
 			});
 		} finally {
-			try (com.mishiranu.dashchan.util.SharedPreferences.Editor editor = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
-				if (old instanceof Boolean) editor.put(key, (Boolean) old); else editor.remove(key);
-			}
+			SystemNavigationModeFixture.setMode(old);
 		}
 	}
 	@Test public void transientViewportResizeKeepsRoutesAndMixedSizeSnapshotsWithoutStretching() {
 		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && ValueAnimator.areAnimatorsEnabled());
-		String key = com.mishiranu.dashchan.content.Preferences.KEY_PREDICTIVE_BACK;
-		Object old = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll().get(key);
+		SystemNavigationMode.Mode old = SystemNavigationMode.get();
 		PredictiveBackLayout[] host = {null};
 		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
 			scenario.onActivity(a -> {
-				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().put(key, true).close();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				host[0] = new PredictiveBackLayout(a); a.setContentView(host[0]);
 			});
 			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
@@ -159,19 +154,16 @@ public class PredictiveStage23ControllerTest {
 				assertEquals(before, BackPreviewBudget.usedBytes());
 			});
 		} finally {
-			try (com.mishiranu.dashchan.util.SharedPreferences.Editor editor = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
-				if (old instanceof Boolean) editor.put(key, (Boolean) old); else editor.remove(key);
-			}
+			SystemNavigationModeFixture.setMode(old);
 		}
 	}
 	@Test public void missingSnapshotUsesLiveFallbackAndCancellationDoesNotCaptureOrMutateViews() {
 		Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && ValueAnimator.areAnimatorsEnabled());
-		String key = com.mishiranu.dashchan.content.Preferences.KEY_PREDICTIVE_BACK;
-		Object old = com.mishiranu.dashchan.content.Preferences.PREFERENCES.getAll().get(key);
+		SystemNavigationMode.Mode old = SystemNavigationMode.get();
 		PredictiveBackLayout[] host = {null};
 		try (ActivityScenario<StandardContentTestActivity> scenario = ActivityScenario.launch(StandardContentTestActivity.class)) {
 			scenario.onActivity(a -> {
-				com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit().put(key, true).close();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				host[0] = new PredictiveBackLayout(a); a.setContentView(host[0]);
 			});
 			InstrumentationRegistry.getInstrumentation().waitForIdleSync();
@@ -189,9 +181,7 @@ public class PredictiveStage23ControllerTest {
 				} finally { controller.close(); }
 			});
 		} finally {
-			try (com.mishiranu.dashchan.util.SharedPreferences.Editor editor = com.mishiranu.dashchan.content.Preferences.PREFERENCES.edit()) {
-				if (old instanceof Boolean) editor.put(key, (Boolean) old); else editor.remove(key);
-			}
+			SystemNavigationModeFixture.setMode(old);
 		}
 	}
 	@Test public void failedCurrentCaptureUsesTheMainActivityAdapterOnceAndLateReadyCannotTouchNextGesture() {

@@ -10,7 +10,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.core.app.ActivityScenario;
 import chan.content.Chan;
-import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.util.SystemNavigationMode;
+import com.mishiranu.dashchan.util.SystemNavigationModeFixture;
 import com.mishiranu.dashchan.content.context.ContextGraph;
 import com.mishiranu.dashchan.content.context.ContextSource;
 import com.mishiranu.dashchan.content.database.PagesDatabase;
@@ -48,13 +49,13 @@ public class ContextViewportBackTest {
 		FrameLayout root; RecyclerView list; RecyclerView.Adapter<RecyclerView.ViewHolder> adapter;
 		ContextDialogProvider provider; ContextDialogProvider.Factory factory;
 		UiManager ui; UiManager.ConfigurationSet source;
-		Object old; long budgetBefore;
+		SystemNavigationMode.Mode old; long budgetBefore;
 		Fixture() {
 			Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34 && android.animation.ValueAnimator.areAnimatorsEnabled());
 			activity = ActivityScenario.launch(StandardContentTestActivity.class);
 			activity.onActivity(a -> {
-				old = Preferences.PREFERENCES.getAll().get(Preferences.KEY_PREDICTIVE_BACK);
-				Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, true).close();
+				old = SystemNavigationMode.get();
+				SystemNavigationModeFixture.setMode(SystemNavigationMode.Mode.GESTURES);
 				budgetBefore = BackPreviewBudget.usedBytes();
 				root = new FrameLayout(a); list = new RecyclerView(a); list.setLayoutManager(new LinearLayoutManager(a));
 				root.addView(list, new FrameLayout.LayoutParams(-1, -1)); a.setContentView(root);
@@ -155,8 +156,7 @@ public class ContextViewportBackTest {
 		@Override public void close() {
 			main(() -> {
 				provider.onCancel(); assertEquals(budgetBefore, BackPreviewBudget.usedBytes());
-				if (old instanceof Boolean) Preferences.PREFERENCES.edit().put(Preferences.KEY_PREDICTIVE_BACK, (Boolean) old).close();
-				else Preferences.PREFERENCES.edit().remove(Preferences.KEY_PREDICTIVE_BACK).close();
+				SystemNavigationModeFixture.setMode(old);
 			}); activity.close();
 		}
 	}

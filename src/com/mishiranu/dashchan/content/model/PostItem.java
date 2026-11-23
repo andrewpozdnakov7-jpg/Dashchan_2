@@ -11,6 +11,7 @@ import chan.content.ChanMarkup;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.Preferences;
+import com.mishiranu.dashchan.content.storage.AutohideStorage.HideMode;
 import com.mishiranu.dashchan.graphics.ColorScheme;
 import com.mishiranu.dashchan.text.HtmlParser;
 import com.mishiranu.dashchan.text.style.LinkSpan;
@@ -115,6 +116,8 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 
 	private HideState hideState = HideState.UNDEFINED;
 	private String hideReason;
+	private HideMode hideMode = HideMode.INHERIT;
+	private long autohideRevision = -1;
 	private int localLikeOffset;
 	private int localDislikeOffset;
 	private int submittedVote;
@@ -864,8 +867,25 @@ public class PostItem implements AttachmentItem.Master, ChanMarkup.MarkupExtra, 
 		return hideReason;
 	}
 
+	public HideMode getHideMode() {
+		return hideMode;
+	}
+
+	public boolean isHideStateResolved(long revision) {
+		return hideState != HideState.UNDEFINED && (autohideRevision < 0 || autohideRevision == revision);
+	}
+
+	public void setAutohideResult(String reason, HideMode mode, long revision) {
+		hideState = reason != null ? HideState.HIDDEN : HideState.SHOWN;
+		hideReason = reason;
+		hideMode = mode;
+		autohideRevision = revision;
+	}
+
 	public void setHidden(HideState hideState, String hideReason) {
 		this.hideState = hideState;
 		this.hideReason = hideReason;
+		hideMode = HideMode.INHERIT;
+		autohideRevision = -1;
 	}
 }

@@ -39,6 +39,11 @@ final class ExperimentalPreferenceDescriptors {
 	}
 
 
+	static Toggle lenovoKeyboardFix() {
+		return new Toggle(Preferences.KEY_LENOVO_TB320FC_KEYBOARD_FIX, Preferences.DEFAULT_LENOVO_TB320FC_KEYBOARD_FIX,
+				true, R.string.lenovo_tb320fc_keyboard_fix, R.string.lenovo_tb320fc_keyboard_fix_summary);
+	}
+
 	static Toggle compactDialogs() {
 		return new Toggle(Preferences.KEY_COMPACT_DIALOGS, Preferences.DEFAULT_COMPACT_DIALOGS,
 				true, R.string.compact_dialogs, R.string.compact_dialogs_summary);

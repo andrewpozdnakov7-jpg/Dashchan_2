@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.ui.preference;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
+import com.mishiranu.dashchan.BuildConfig;
 import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.LauncherIconManager;
 import com.mishiranu.dashchan.content.Preferences;
@@ -45,13 +46,15 @@ public class InterfaceFragment extends PreferenceFragment {
 		addButton(R.string.navigation_drawer, R.string.navigation_drawer_settings_summary)
 				.setOnClickListener(p -> ((FragmentHandler) requireActivity())
 						.pushFragment(new NavigationDrawerSettingsFragment()));
+		if (BuildConfig.ENABLE_PREDICTIVE_BACK) {
+			addButton(R.string.gesture_controls, R.string.predictive_back_settings_summary)
+					.setOnClickListener(p -> ((FragmentHandler) requireActivity())
+							.pushFragment(new PredictiveBackSettingsFragment()));
+		}
 
 		addHeader(R.string.threads_list);
 		addCheck(true, Preferences.KEY_PAGE_BY_PAGE, Preferences.DEFAULT_PAGE_BY_PAGE,
 				R.string.paged_board_navigation, R.string.paged_board_navigation__summary);
-		addCheck(true, Preferences.KEY_REMOVE_HIDDEN_THREADS,
-				Preferences.DEFAULT_REMOVE_HIDDEN_THREADS, R.string.remove_hidden_threads,
-				R.string.remove_hidden_threads__summary);
 		addCheck(true, Preferences.KEY_HIDE_THREADS_WITH_SWIPE,
 				Preferences.DEFAULT_HIDE_THREADS_WITH_SWIPE, R.string.hide_threads_with_swipe, 0);
 

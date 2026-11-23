@@ -232,7 +232,8 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 	}
 	@Override public CharSequence placeholder(PostItem post) { return placeholders.get(post.getPostNumber()); }
 	@Override public void onPlaceholderClick(PostItem post) {
-		if (closed || Preferences.isRemoveHiddenPosts() || snapshot == null) return;
+		if (closed || snapshot == null ||
+				source.postStateProvider.isRemovedResolve(post, Preferences.isRemoveHiddenPosts())) return;
 		if (snapshot.posts().containsKey(key(post)) && source.postStateProvider.isHiddenResolve(post)) {
 			new DialogMenu(uiManager.getContext()).add(R.string.context_show_hidden,
 					() -> { clearPreviews(); revealed.add(key(post)); rebuild(); }).create().show();
@@ -379,7 +380,7 @@ final class ContextDialogProvider extends DialogUnit.DialogProvider<ContextDialo
 			catch (RuntimeException ignored) { /* Corrupt reference markup must not crash the reader. */ }
 			if (post != null && configurationSet.postStateProvider.isHiddenResolve(post)) {
 				hiddenGap = true;
-				if (Preferences.isRemoveHiddenPosts()) continue;
+				if (post.getHideMode().removes(Preferences.isRemoveHiddenPosts())) continue;
 				placeholders.put(post.getPostNumber(), uiManager.getContext().getText(R.string.context_hidden));
 			} else if (post == null) {
 				Post.Builder builder = new Post.Builder(); builder.number = ContextSource.number(key);
