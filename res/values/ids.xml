@@ -23,6 +23,8 @@
 	<item type="id" name="menu_soyjak_open_page" />
 	<item type="id" name="menu_soyjak_retry" />
 	<item type="id" name="menu_soyjak_diagnostics" />
+	<item type="id" name="menu_arhivach_open_browser" />
+	<item type="id" name="menu_arhivach_reset_access" />
 	<item type="id" name="menu_soyjak_external_browser" />
 	<item type="id" name="menu_soyjak_read_catalog" />
 	<item type="id" name="menu_soyjak_show_site" />

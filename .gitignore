@@ -1,4 +1,4 @@
-/*
+﻿/*
 !/.gitattributes
 !/.github
 !/.github/**
@@ -50,6 +50,7 @@
 !/tools/design
 /tools/design/*
 !/tools/design/audit.py
+!/tools/check_arhivach_bridge.py
 !/third_party
 /third_party/*
 !/third_party/mozilla-translations

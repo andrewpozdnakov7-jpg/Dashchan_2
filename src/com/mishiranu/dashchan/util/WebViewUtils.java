@@ -50,6 +50,8 @@ public class WebViewUtils {
 	}
 
 	public static void clearCookie(Runnable completion) {
+		// The Arhivach native copy must not outlive the WebView cookies it was taken from.
+		com.mishiranu.dashchan.chan.arhivach.ArhivachBrowserSession.clearStoredClearance("webview_clear");
 		CookieManager.getInstance().removeAllCookies(removed -> {
 			if (completion != null) completion.run();
 		});

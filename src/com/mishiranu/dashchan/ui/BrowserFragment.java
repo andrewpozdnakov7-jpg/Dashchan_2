@@ -41,6 +41,7 @@ import chan.content.Chan;
 import chan.content.ChanLocator;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.arhivach.ArhivachBrowserSession;
 import com.mishiranu.dashchan.chan.soyjak.SoyjakBrowserSession;
 import com.mishiranu.dashchan.chan.soyjak.SoyjakChanLocator;
 import com.mishiranu.dashchan.chan.soyjak.SoyjakDiagnostics;
@@ -260,6 +261,14 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 			SoyjakDiagnostics.event("webview_ua", "fp=" + SoyjakDiagnostics.fingerprint(settings.getUserAgentString())
 					+ " sameAsNative=" + settings.getUserAgentString().equals(
 					AdvancedPreferences.getUserAgent(SoyjakDiagnostics.CHAN_NAME)));
+		}
+		Uri initialUri = getInitialUri();
+		if (initialUri != null && ArhivachBrowserSession.isSite(initialUri)) {
+			String userAgent = AdvancedPreferences.getUserAgent(ArhivachBrowserSession.CHAN_NAME);
+			if (!StringUtils.isEmpty(userAgent)) settings.setUserAgentString(userAgent);
+			ArhivachBrowserSession.log("webview_ua fp="
+					+ ArhivachBrowserSession.fingerprint(settings.getUserAgentString())
+					+ " " + ArhivachBrowserSession.userAgentStatus());
 		}
 		settings.setBuiltInZoomControls(true);
 		settings.setDisplayZoomControls(false);
@@ -548,6 +557,13 @@ public class BrowserFragment extends ContentFragment implements DownloadListener
 			if (view != webView || !isAdded() || url == null) return;
 			if (!isSoyjakReply() && SoyjakBrowserSession.storeCookies(url)) {
 				ClickableToast.show(R.string.soyjak_access_saved);
+			}
+			ArhivachBrowserSession.storeCookies(url);
+			if (ArhivachBrowserSession.isSite(Uri.parse(url))) {
+				String pageTitle = view.getTitle();
+				ArhivachBrowserSession.log("webview_finished host=" + Uri.parse(url).getHost()
+						+ " challengeTitle=" + ("Just a moment...".equals(pageTitle)
+						|| "Attention Required! | Cloudflare".equals(pageTitle)));
 			}
 			if (isSoyjakSite()) {
 				String pageTitle = view.getTitle();
