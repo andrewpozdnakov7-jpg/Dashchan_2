@@ -1369,6 +1369,14 @@ public class ThreadsPage extends ListPage implements ThreadsAdapter.Callback,
 			else showBrowserChallenge(errorItem);
 			return;
 		}
+		if (errorItem.type == ErrorItem.Type.FIREWALL_BLOCK && "arhivach".equals(getPage().chanName)) {
+			// Keep the requested page for the browser action when the error screen is restored.
+			ErrorItem pageError = new ErrorItem(errorItem.type, pageNumber);
+			getAdapter().setSecretAbuAllowed(false);
+			if (getAdapter().isRealEmpty()) switchError(pageError);
+			else showBrowserChallenge(pageError);
+			return;
+		}
 		String message = errorItem.type == ErrorItem.Type.BOARD_NOT_EXISTS && pageNumber >= 1
 				? getString(R.string.number_page_doesnt_exist__format, pageNumber) : errorItem.toString();
 		getAdapter().setSecretAbuAllowed(false);

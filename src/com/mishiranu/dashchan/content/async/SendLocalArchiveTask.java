@@ -190,6 +190,7 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 		boolean saveThumbnails = this.saveThumbnails;
 		boolean saveFiles = this.saveFiles;
 		boolean createZip = this.createZip;
+		boolean useOriginalNames = Preferences.isDownloadOriginalName();
 		HashMap<PostNumber, Post> previousPosts = new HashMap<>();
 		HashMap<String, String> previousSources = new HashMap<>();
 		HashMap<String, Long> previousSizes = new HashMap<>();
@@ -364,13 +365,22 @@ public class SendLocalArchiveTask extends ExecutorTask<Integer, SendLocalArchive
 							if (oldFilePath == null) oldFilePath = resourcePath(previousFile.fileUri);
 							if (oldThumbnailPath == null) oldThumbnailPath = resourcePath(previousFile.thumbnailUri);
 						}
+						String fileName = chan.locator.createAttachmentFileName(fileUri);
+						String reportedName = StringUtils.nullIfEmpty(file.originalName);
+						if (reportedName == null && previousFile != null) reportedName = previousFile.originalName;
+						String originalName = StringUtils.getNormalizedOriginalName(reportedName, fileName);
+						String archiveFileName = useOriginalNames && originalName != null
+								? originalName.replaceAll("[\\p{Cntrl}\"]", "_").trim() : fileName;
+						// Leave room in an Android filesystem name for a suffix when attachments collide.
+						if (archiveFileName.isEmpty() || archiveFileName.getBytes(StandardCharsets.UTF_8).length > 240) {
+							archiveFileName = fileName;
+						}
 						LocalArchiveMediaPlan.Asset original = media.register(DIRECTORY_FILES,
-								chan.locator.createAttachmentFileName(fileUri), sourceIdentity(fileUri, previousSources),
-								remoteSource(fileUri), oldFilePath, file.size);
+								archiveFileName, sourceIdentity(fileUri, previousSources), remoteSource(fileUri),
+								oldFilePath, file.size);
 						LocalArchiveMediaPlan.Asset thumbnail = thumbnailUri != null ? media.register(DIRECTORY_THUMBNAILS,
 								chan.locator.createAttachmentFileName(thumbnailUri), sourceIdentity(thumbnailUri, previousSources),
 								remoteSource(thumbnailUri), oldThumbnailPath, 0) : null;
-						String originalName = StringUtils.getNormalizedOriginalName(file.originalName, original.name());
 						htmlBuilder.addFile(original.path, thumbnail != null ? thumbnail.path : null, originalName, file.size,
 								file.width, file.height);
 					}

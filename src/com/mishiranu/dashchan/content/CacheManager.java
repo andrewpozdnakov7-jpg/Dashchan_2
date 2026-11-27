@@ -11,6 +11,7 @@ import chan.content.Chan;
 import chan.content.ChanResourceAccess;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.util.AndroidUtils;
+import com.mishiranu.dashchan.util.CacheDirectory;
 import com.mishiranu.dashchan.util.Hasher;
 import com.mishiranu.dashchan.util.LruCache;
 import com.mishiranu.dashchan.util.MimeTypes;
@@ -23,6 +24,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -47,7 +49,15 @@ public class CacheManager implements Runnable {
 			IntentFilter intentFilter = new IntentFilter(Intent.ACTION_MEDIA_MOUNTED);
 			intentFilter.addDataScheme("file");
 			AndroidUtils.registerSystemReceiver(MainApplication.getInstance(),
-					AndroidUtils.createReceiver((r, c, i) -> syncCache()), intentFilter);
+					AndroidUtils.createReceiver((r, c, i) -> {
+						synchronized (directoryLocker) {
+							externalCacheDirectory = null;
+							externalTempDirectory = null;
+							thumbnailsWriteDirectory = null;
+							mediaWriteDirectory = null;
+						}
+						syncCache();
+					}), intentFilter);
 			new Thread(this, "CacheManagerWorker").start();
 		}
 	}
@@ -63,17 +73,7 @@ public class CacheManager implements Runnable {
 			} catch (InterruptedException e) {
 				return;
 			}
-			File file = null;
-			switch (cacheItem.type) {
-				case THUMBNAILS: {
-					file = new File(getThumbnailsDirectory(), cacheItem.name);
-					break;
-				}
-				case MEDIA: {
-					file = new File(getMediaDirectory(), cacheItem.name);
-					break;
-				}
-			}
+			File file = cacheItem.file;
 			LinkedHashMap<String, CacheItem> items = getCacheItems(cacheItem.type);
 			synchronized (items) {
 				// An eviction queued before a replacement/scan must not delete the replacement.
@@ -81,9 +81,9 @@ public class CacheManager implements Runnable {
 				if (exists && (file.length() != cacheItem.length
 						|| file.lastModified() != cacheItem.lastModified)) continue;
 				if (!exists || file.delete()) {
-					CacheItem removed = items.remove(cacheItem.nameLc);
+					CacheItem removed = items.remove(cacheItem.key);
 					if (removed != null) modifyCacheSize(cacheItem.type, -removed.length);
-					getCacheScan(cacheItem.type).record(cacheItem.nameLc, null);
+					getCacheScan(cacheItem.type).record(cacheItem.key, null);
 				}
 			}
 		}
@@ -94,17 +94,23 @@ public class CacheManager implements Runnable {
 	private final Object scanLock = new Object();
 
 	private static class CacheItem {
-		public enum Type {THUMBNAILS, MEDIA}
+		public enum Type {
+			THUMBNAILS("thumbnails"), MEDIA("media");
 
-		public final String name;
-		public final String nameLc;
+			final String directoryName;
+
+			Type(String directoryName) { this.directoryName = directoryName; }
+		}
+
+		public final File file;
+		public final String key;
 		public final long length;
 		public long lastModified;
 		public final Type type;
 
 		public CacheItem(File file, Type type) {
-			name = file.getName();
-			nameLc = name.toLowerCase(Locale.US);
+			this.file = file;
+			key = cacheKey(file);
 			length = file.length();
 			lastModified = file.lastModified();
 			this.type = type;
@@ -113,7 +119,7 @@ public class CacheManager implements Runnable {
 		@NonNull
 		@Override
 		public String toString() {
-			return "CacheItem [\"" + name + "\", " + length + "]";
+			return "CacheItem [\"" + file.getName() + "\", " + length + "]";
 		}
 
 		@Override
@@ -123,7 +129,7 @@ public class CacheManager implements Runnable {
 			}
 			if (o instanceof CacheItem) {
 				CacheItem co = (CacheItem) o;
-				return type == co.type && nameLc.equals(co.nameLc);
+				return type == co.type && key.equals(co.key);
 			}
 			return false;
 		}
@@ -133,9 +139,13 @@ public class CacheManager implements Runnable {
 			int prime = 31;
 			int result = 1;
 			result = prime * result + type.hashCode();
-			result = prime * result + nameLc.hashCode();
+			result = prime * result + key.hashCode();
 			return result;
 		}
+	}
+
+	private static String cacheKey(File file) {
+		return file.getParent() + File.separator + file.getName().toLowerCase(Locale.US);
 	}
 
 	private static final Comparator<CacheItem> SORT_BY_DATE_COMPARATOR =
@@ -149,25 +159,27 @@ public class CacheManager implements Runnable {
 	private volatile long thumbnailsCacheSize;
 	private volatile long mediaCacheSize;
 
-	private long fillCache(LinkedHashMap<String, CacheItem> cacheItems, File directory, CacheItem.Type type)
+	private void fillCache(LinkedHashMap<String, CacheItem> cacheItems, CacheItem.Type type)
 			throws IOException {
-		cacheItems.clear();
-		if (directory == null) {
-			throw new IOException("Cache directory unavailable");
-		}
+		File writeDirectory = getWritableCacheDirectory(type);
 		ArrayList<CacheItem> cacheItemsList = new ArrayList<>();
-		File[] files = directory.listFiles();
-		if (files == null) throw new IOException("Cache directory scan failed");
-		for (File file : files) {
-			cacheItemsList.add(new CacheItem(file, type));
+		boolean scanned = false;
+		for (File directory : getCacheDirectories(type)) {
+			File[] files = directory.listFiles();
+			if (files == null) {
+				if (directory.equals(writeDirectory)) throw new IOException("Cache directory scan failed");
+				continue;
+			}
+			scanned = true;
+			for (File file : files) {
+				if (file.isFile()) cacheItemsList.add(new CacheItem(file, type));
+			}
 		}
+		if (!scanned) throw new IOException("Cache directory unavailable");
 		Collections.sort(cacheItemsList, SORT_BY_DATE_COMPARATOR);
-		long size = 0L;
 		for (CacheItem cacheItem : cacheItemsList) {
-			cacheItems.put(cacheItem.nameLc, cacheItem);
-			size += cacheItem.length;
+			cacheItems.put(cacheItem.key, cacheItem);
 		}
-		return size;
 	}
 
 	private void syncCache() {
@@ -186,8 +198,8 @@ public class CacheManager implements Runnable {
 				// No shared index lock during directory traversal, stat calls or sorting.
 				LinkedHashMap<String, CacheItem> thumbnails = new LinkedHashMap<>();
 				LinkedHashMap<String, CacheItem> media = new LinkedHashMap<>();
-				fillCache(thumbnails, getThumbnailsDirectory(), CacheItem.Type.THUMBNAILS);
-				fillCache(media, getMediaDirectory(), CacheItem.Type.MEDIA);
+				fillCache(thumbnails, CacheItem.Type.THUMBNAILS);
+				fillCache(media, CacheItem.Type.MEDIA);
 				synchronized (scanLock) {
 					if (cacheBuildingLatch == latch) {
 						synchronized (thumbnailsCache) {
@@ -323,14 +335,14 @@ public class CacheManager implements Runnable {
 		}
 	}
 
-	private boolean isFileExistsInCache(File file, String fileName, CacheItem.Type type) {
+	private boolean isFileExistsInCache(File file, CacheItem.Type type) {
 		LinkedHashMap<String, CacheItem> cacheItems = getCacheItems(type);
 		synchronized (cacheItems) {
 			// A known file must remain readable even before the full index is ready.
 			if (getCacheScan(type).isBuilding() || cacheScanFailed) return file.isFile();
-			CacheItem cacheItem = cacheItems.get(fileName.toLowerCase(Locale.US));
-			if (cacheItem != null && !file.exists()) {
-				cacheItems.remove(cacheItem.nameLc);
+			CacheItem cacheItem = cacheItems.get(cacheKey(file));
+			if (cacheItem != null && !file.isFile()) {
+				cacheItems.remove(cacheItem.key);
 				modifyCacheSize(type, -cacheItem.length);
 				cacheItem = null;
 			}
@@ -338,11 +350,11 @@ public class CacheManager implements Runnable {
 		}
 	}
 
-	private void updateCachedFileLastModified(File file, String fileName, CacheItem.Type type) {
+	private void updateCachedFileLastModified(File file, CacheItem.Type type) {
 		LinkedHashMap<String, CacheItem> cacheItems = getCacheItems(type);
 		synchronized (cacheItems) {
-			String fileNameLc = fileName.toLowerCase(Locale.US);
-			CacheItem cacheItem = cacheItems.remove(fileNameLc);
+			String key = cacheKey(file);
+			CacheItem cacheItem = cacheItems.remove(key);
 			if (cacheItem == null && (getCacheScan(type).isBuilding() || cacheScanFailed) && file.isFile()) {
 				cacheItem = new CacheItem(file, type);
 				modifyCacheSize(type, cacheItem.length);
@@ -352,32 +364,33 @@ public class CacheManager implements Runnable {
 					long lastModified = System.currentTimeMillis();
 					file.setLastModified(lastModified);
 					cacheItem.lastModified = lastModified;
-					cacheItems.put(fileNameLc, cacheItem);
-					getCacheScan(type).record(fileNameLc, cacheItem);
+					cacheItems.put(key, cacheItem);
+					getCacheScan(type).record(key, cacheItem);
 				} else {
 					modifyCacheSize(type, -cacheItem.length);
-					getCacheScan(type).record(fileNameLc, null);
+					getCacheScan(type).record(key, null);
 				}
 			}
-			if (!cacheItems.containsKey(fileNameLc)) getCacheScan(type).record(fileNameLc, null);
+			if (!cacheItems.containsKey(key)) getCacheScan(type).record(key, null);
 		}
 	}
 
-	private void validateNewCachedFile(File file, String fileName, CacheItem.Type type, boolean success) {
+	private void validateNewCachedFile(File file, CacheItem.Type type, boolean success) {
 		LinkedHashMap<String, CacheItem> cacheItems = getCacheItems(type);
 		synchronized (cacheItems) {
 			success &= file.isFile();
+			String key = cacheKey(file);
 			long lengthDelta = 0L;
-			CacheItem cacheItem = cacheItems.remove(fileName.toLowerCase(Locale.US));
+			CacheItem cacheItem = cacheItems.remove(key);
 			if (cacheItem != null) {
 				lengthDelta = -cacheItem.length;
 			}
 			if (success) {
 				cacheItem = new CacheItem(file, type);
-				cacheItems.put(cacheItem.nameLc, cacheItem);
+				cacheItems.put(key, cacheItem);
 				lengthDelta += cacheItem.length;
 			}
-			getCacheScan(type).record(fileName.toLowerCase(Locale.US), success ? cacheItem : null);
+			getCacheScan(type).record(key, success ? cacheItem : null);
 			modifyCacheSize(type, lengthDelta);
 			if (success) {
 				cleanupAsync(type == CacheItem.Type.THUMBNAILS, type == CacheItem.Type.MEDIA);
@@ -386,7 +399,7 @@ public class CacheManager implements Runnable {
 	}
 
 	public boolean isCacheAvailable() {
-		return Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState());
+		return getMediaDirectory() != null;
 	}
 
 	/** Non-blocking snapshot: -1 while scanning, -2 if the index could not be built. */
@@ -397,36 +410,65 @@ public class CacheManager implements Runnable {
 		return thumbnailsCacheSize + mediaCacheSize;
 	}
 
-	private File getThumbnailsDirectory() {
-		return getCacheDirectory("thumbnails");
-	}
-
 	public File getMediaDirectory() {
-		return getCacheDirectory("media");
+		return getWritableCacheDirectory(CacheItem.Type.MEDIA);
 	}
 
-	private File getCacheDirectory(String name) {
-		File directory = getExternalCacheDirectory();
-		if (directory == null) {
-			return null;
-		}
-		File file = new File(directory, name);
-		if (isCacheAvailable() && !file.exists()) {
-			file.mkdirs();
-		}
-		return file;
+	public List<File> getMediaDirectories() {
+		return getCacheDirectories(CacheItem.Type.MEDIA);
 	}
 
-	private File getMediaFile(String fileName, boolean touch) {
-		File directory = getMediaDirectory();
-		if (directory == null) {
-			return null;
+	private File getCacheDirectory(CacheItem.Type type, boolean internal) {
+		File root = internal ? getInternalCacheDirectory() : getExternalCacheDirectory();
+		return CacheDirectory.child(root, type.directoryName);
+	}
+
+	private List<File> getCacheDirectories(CacheItem.Type type) {
+		ArrayList<File> directories = new ArrayList<>(2);
+		File external = getCacheDirectory(type, false);
+		if (external != null) directories.add(external);
+		File internal = getCacheDirectory(type, true);
+		if (internal != null && !internal.equals(external)) directories.add(internal);
+		return directories;
+	}
+
+	private File getWritableCacheDirectory(CacheItem.Type type) {
+		synchronized (directoryLocker) {
+			boolean media = type == CacheItem.Type.MEDIA;
+			File current = media ? mediaWriteDirectory : thumbnailsWriteDirectory;
+			if (current != null && current.isDirectory() && current.canWrite()) return current;
+			File external = Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())
+					? getCacheDirectory(type, false) : null;
+			File internal = getCacheDirectory(type, true);
+			File directory;
+			if (CacheDirectory.isWritable(external)) {
+				directory = external;
+			} else if (CacheDirectory.isWritable(internal)) {
+				directory = internal;
+				android.util.Log.i("CacheManager", "internal_cache_selected type=" + type);
+			} else {
+				directory = null;
+			}
+			if (media) {
+				mediaWriteDirectory = directory;
+			} else {
+				thumbnailsWriteDirectory = directory;
+			}
+			return directory;
 		}
-		File file = new File(directory, fileName);
-		if (touch) {
-			updateCachedFileLastModified(file, fileName, CacheItem.Type.MEDIA);
+	}
+
+	private File getCachedOrWritableFile(String name, CacheItem.Type type) {
+		if (name == null) return null;
+		File writeDirectory = getWritableCacheDirectory(type);
+		File destination = CacheDirectory.child(writeDirectory, name);
+		if (destination != null && isFileExistsInCache(destination, type)) return destination;
+		for (File directory : getCacheDirectories(type)) {
+			if (directory.equals(writeDirectory)) continue;
+			File file = new File(directory, name);
+			if (isFileExistsInCache(file, type) && file.canRead()) return file;
 		}
-		return file;
+		return destination;
 	}
 
 	public File getMediaFile(Uri uri, boolean touch) {
@@ -436,28 +478,31 @@ public class CacheManager implements Runnable {
 			String path = uri.getPath();
 			return path != null ? new File(path) : null;
 		}
-		return getMediaFile(getCachedFileKey(uri), touch);
+		File file = getCachedOrWritableFile(getCachedFileKey(uri), CacheItem.Type.MEDIA);
+		if (touch && file != null) updateCachedFileLastModified(file, CacheItem.Type.MEDIA);
+		return file;
+	}
+
+	public File getMediaFileForWrite(Uri uri) {
+		String key = getCachedFileKey(uri);
+		return key != null ? CacheDirectory.child(getMediaDirectory(), key) : null;
 	}
 
 	/** Completed-index check for the browser; does not wait for scans or renew an entry. */
 	boolean isCompletedMediaFile(File file, long length, long modified) {
 		synchronized (mediaCache) {
-			CacheItem item = mediaCache.get(file.getName().toLowerCase(Locale.US));
+			CacheItem item = mediaCache.get(cacheKey(file));
 			return item != null && item.length == length && item.lastModified == modified;
 		}
 	}
 
-	public File getPartialMediaFile(Uri uri) {
-		return getMediaFile(getCachedFileKey(uri) + ".part", false);
-	}
-
-	private void eraseCache(LinkedHashMap<String, CacheItem> cacheItems, File directory,
-			CacheItem.Type type) throws InterruptedException {
+	private void eraseCache(LinkedHashMap<String, CacheItem> cacheItems, CacheItem.Type type)
+			throws InterruptedException {
 		// This explicit operation runs on the clearing worker. Rescan its directory
 		// so a failed/startup index never silently leaves unindexed files behind.
 		LinkedHashMap<String, CacheItem> snapshot = new LinkedHashMap<>();
 		try {
-			fillCache(snapshot, directory, type);
+			fillCache(snapshot, type);
 		} catch (IOException e) {
 			cacheScanFailed = true;
 			return;
@@ -468,12 +513,12 @@ public class CacheManager implements Runnable {
 		while (iterator.hasNext()) {
 			if (Thread.interrupted()) throw new InterruptedException();
 			CacheItem cacheItem = iterator.next();
-			File file = new File(directory, cacheItem.name);
+			File file = cacheItem.file;
 			if (file.delete() || !file.exists()) {
 				iterator.remove();
-				getCacheScan(type).record(cacheItem.nameLc, null);
+				getCacheScan(type).record(cacheItem.key, null);
 			} else {
-				getCacheScan(type).record(cacheItem.nameLc, cacheItem);
+				getCacheScan(type).record(cacheItem.key, cacheItem);
 			}
 		}
 	}
@@ -482,7 +527,7 @@ public class CacheManager implements Runnable {
 		awaitCacheScanForErase();
 		synchronized (thumbnailsCache) {
 			try {
-				eraseCache(thumbnailsCache, getThumbnailsDirectory(), CacheItem.Type.THUMBNAILS);
+				eraseCache(thumbnailsCache, CacheItem.Type.THUMBNAILS);
 			} finally {
 				thumbnailsCacheSize = sumCacheSize(thumbnailsCache);
 			}
@@ -493,7 +538,7 @@ public class CacheManager implements Runnable {
 		awaitCacheScanForErase();
 		synchronized (mediaCache) {
 			try {
-				eraseCache(mediaCache, getMediaDirectory(), CacheItem.Type.MEDIA);
+				eraseCache(mediaCache, CacheItem.Type.MEDIA);
 			} finally {
 				mediaCacheSize = sumCacheSize(mediaCache);
 			}
@@ -557,7 +602,7 @@ public class CacheManager implements Runnable {
 	public boolean cancelCachedMediaBusy(File file) {
 		if (cacheItemsToDelete.remove(new CacheItem(file, CacheItem.Type.MEDIA))) {
 			file.delete();
-			validateNewCachedFile(file, file.getName(), CacheItem.Type.MEDIA, false);
+			validateNewCachedFile(file, CacheItem.Type.MEDIA, false);
 			return true;
 		}
 		return false;
@@ -567,23 +612,19 @@ public class CacheManager implements Runnable {
 		File directory = file.getParentFile();
 		if (directory != null) {
 			CacheItem.Type type = null;
-			if (directory.equals(getThumbnailsDirectory())) {
+			if (getCacheDirectories(CacheItem.Type.THUMBNAILS).contains(directory)) {
 				type = CacheItem.Type.THUMBNAILS;
-			} else if (directory.equals(getMediaDirectory())) {
+			} else if (getCacheDirectories(CacheItem.Type.MEDIA).contains(directory)) {
 				type = CacheItem.Type.MEDIA;
 			}
 			if (type != null) {
-				validateNewCachedFile(file, file.getName(), type, success);
+				validateNewCachedFile(file, type, success);
 			}
 		}
 	}
 
 	public File getThumbnailFile(String thumbnailKey) {
-		File directory = getThumbnailsDirectory();
-		if (directory == null) {
-			return null;
-		}
-		return new File(directory, thumbnailKey);
+		return getCachedOrWritableFile(thumbnailKey, CacheItem.Type.THUMBNAILS);
 	}
 
 	public Bitmap loadThumbnailExternal(String thumbnailKey) {
@@ -592,14 +633,11 @@ public class CacheManager implements Runnable {
 	}
 
 	public Bitmap loadThumbnailExternal(String thumbnailKey, int targetSize) {
-		if (!isCacheAvailable()) {
-			return null;
-		}
 		File file = getThumbnailFile(thumbnailKey);
 		if (file == null) {
 			return null;
 		}
-		if (!isFileExistsInCache(file, thumbnailKey, CacheItem.Type.THUMBNAILS)) {
+		if (!isFileExistsInCache(file, CacheItem.Type.THUMBNAILS)) {
 			return null;
 		}
 		Bitmap bitmap;
@@ -608,11 +646,11 @@ public class CacheManager implements Runnable {
 			if (bitmap == null) {
 				if (!Thread.currentThread().isInterrupted()) {
 					file.delete();
-					validateNewCachedFile(file, thumbnailKey, CacheItem.Type.THUMBNAILS, false);
+					validateNewCachedFile(file, CacheItem.Type.THUMBNAILS, false);
 				}
 				return null;
 			}
-			updateCachedFileLastModified(file, thumbnailKey, CacheItem.Type.THUMBNAILS);
+			updateCachedFileLastModified(file, CacheItem.Type.THUMBNAILS);
 			return bitmap;
 		} catch (RuntimeException | OutOfMemoryError e) {
 			return null;
@@ -620,10 +658,7 @@ public class CacheManager implements Runnable {
 	}
 
 	public void storeThumbnailExternal(String thumbnailKey, Bitmap data) {
-		if (!isCacheAvailable()) {
-			return;
-		}
-		File directory = getThumbnailsDirectory();
+		File directory = getWritableCacheDirectory(CacheItem.Type.THUMBNAILS);
 		if (directory == null) {
 			return;
 		}
@@ -635,7 +670,7 @@ public class CacheManager implements Runnable {
 		} catch (IOException e) {
 			e.printStackTrace();
 		} finally {
-			validateNewCachedFile(file, thumbnailKey, CacheItem.Type.THUMBNAILS, success);
+			validateNewCachedFile(file, CacheItem.Type.THUMBNAILS, success);
 		}
 	}
 
@@ -643,6 +678,9 @@ public class CacheManager implements Runnable {
 
 	private volatile File externalCacheDirectory;
 	private volatile File externalTempDirectory;
+	private volatile File internalCacheDirectory;
+	private File thumbnailsWriteDirectory;
+	private File mediaWriteDirectory;
 
 	private File getExternalCacheDirectory() {
 		if (externalCacheDirectory == null) {
@@ -653,6 +691,15 @@ public class CacheManager implements Runnable {
 			}
 		}
 		return externalCacheDirectory;
+	}
+
+	private File getInternalCacheDirectory() {
+		File directory = internalCacheDirectory;
+		if (directory == null) {
+			directory = MainApplication.getInstance().getCacheDir();
+			internalCacheDirectory = directory;
+		}
+		return directory;
 	}
 
 	private File getExternalTempDirectory() {

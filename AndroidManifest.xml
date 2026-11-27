@@ -122,6 +122,8 @@
 				<data android:host="kohlchan.net" />
 				<data android:host="pikabu.ru" />
 				<data android:host="www.pikabu.ru" />
+				<data android:host="aoba.me" />
+				<data android:host="1chan.ink" />
 			</intent-filter>
 
 		</activity>

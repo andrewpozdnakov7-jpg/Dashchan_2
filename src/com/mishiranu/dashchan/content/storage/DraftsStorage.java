@@ -14,6 +14,7 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.content.MainApplication;
 import com.mishiranu.dashchan.content.async.ReadCaptchaTask;
 import com.mishiranu.dashchan.content.model.FileHolder;
+import com.mishiranu.dashchan.util.CacheDirectory;
 import com.mishiranu.dashchan.util.GraphicsUtils;
 import com.mishiranu.dashchan.util.Hasher;
 import com.mishiranu.dashchan.util.LruCache;
@@ -52,11 +53,10 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	private DraftsStorage() {
 		super("drafts", 2000, 10000);
 		startRead();
-		File directory = getAttachmentDraftsDirectory();
-		if (directory != null) {
-			File[] files = directory.listFiles();
+		HashSet<String> hashes = collectAttachmentDraftHashes();
+		for (File directory : getAttachmentDraftsDirectories()) {
+			File[] files = directory != null ? directory.listFiles() : null;
 			if (files != null && files.length > 0) {
-				HashSet<String> hashes = collectAttachmentDraftHashes();
 				for (File file : files) {
 					if (!hashes.contains(file.getName())) {
 						file.delete();
@@ -194,23 +194,17 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		captchaChanName = null;
 	}
 
-	private static File getAttachmentDraftsDirectory() {
-		File directory = MainApplication.getInstance().getExternalCacheDir();
-		if (directory != null) {
-			directory = new File(directory, "attachments");
-			if (directory.isDirectory() || directory.mkdirs()) {
-				return directory;
-			}
-		}
-		return null;
+	private static File[] getAttachmentDraftsDirectories() {
+		MainApplication application = MainApplication.getInstance();
+		return new File[] {CacheDirectory.child(application.getExternalCacheDir(), "attachments"),
+				CacheDirectory.child(application.getCacheDir(), "attachments")};
 	}
 
-	private static File resolveAttachmentDraftFile(String hash) {
-		if (!isAttachmentDraftHash(hash)) {
-			return null;
+	private static void deleteAttachmentDraftFiles(String hash, File[] directories) {
+		if (!isAttachmentDraftHash(hash)) return;
+		for (File directory : directories) {
+			if (directory != null) new File(directory, hash).delete();
 		}
-		File directory = getAttachmentDraftsDirectory();
-		return directory != null ? new File(directory, hash) : null;
 	}
 
 	private static boolean isAttachmentDraftHash(String hash) {
@@ -218,8 +212,12 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	}
 
 	public File getAttachmentDraftFile(String hash) {
-		File file = resolveAttachmentDraftFile(hash);
-		return file != null && file.isFile() ? file : null;
+		if (!isAttachmentDraftHash(hash)) return null;
+		for (File directory : getAttachmentDraftsDirectories()) {
+			File file = CacheDirectory.child(directory, hash);
+			if (file != null && file.isFile() && file.canRead()) return file;
+		}
+		return null;
 	}
 
 	public FileHolder getAttachmentDraftFileHolder(String hash) {
@@ -236,10 +234,16 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 	}
 
 	private String storeAttachmentFile(FileHolder fileHolder, boolean serializeNewFile) {
-		File directory = getAttachmentDraftsDirectory();
-		if (directory == null) {
-			return null;
+		for (File directory : getAttachmentDraftsDirectories()) {
+			if (!CacheDirectory.prepare(directory)) continue;
+			String hash = storeAttachmentFile(fileHolder, serializeNewFile, directory);
+			if (hash != null) return hash;
 		}
+		android.util.Log.w("DraftsStorage", "attachment_cache_write_failed");
+		return null;
+	}
+
+	private String storeAttachmentFile(FileHolder fileHolder, boolean serializeNewFile, File directory) {
 		File tempFile;
 		try {
 			tempFile = File.createTempFile("attachment-", ".tmp", directory);
@@ -253,9 +257,9 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 				hash = StringUtils.formatHex(Hasher.getInstanceSha256().calculateAndCopy(input, output));
 			}
 			File file = new File(directory, hash);
-			boolean newFile = !file.isFile();
+			boolean newFile = !file.isFile() || !file.canRead();
 			if (newFile && !tempFile.renameTo(file)) {
-				if (!file.isFile()) {
+				if (!file.isFile() || !file.canRead()) {
 					return null;
 				}
 				newFile = false;
@@ -304,16 +308,11 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 				}
 			}
 		}
-		File directory = getAttachmentDraftsDirectory();
-		if (directory != null) {
-			HashSet<String> referencedHashes = collectAttachmentDraftHashes();
-			for (String hash : hashes) {
-				if (!referencedHashes.contains(hash)) {
-					File file = resolveAttachmentDraftFile(hash);
-					if (file != null) {
-						file.delete();
-					}
-				}
+		File[] directories = getAttachmentDraftsDirectories();
+		HashSet<String> referencedHashes = collectAttachmentDraftHashes();
+		for (String hash : hashes) {
+			if (!referencedHashes.contains(hash)) {
+				deleteAttachmentDraftFiles(hash, directories);
 			}
 		}
 	}
@@ -368,12 +367,10 @@ public class DraftsStorage extends StorageManager.Storage<Pair<List<DraftsStorag
 		for (AttachmentDraft attachmentDraft : attachmentDrafts) {
 			attachmentDraft.collectHashes(removed);
 		}
+		File[] directories = getAttachmentDraftsDirectories();
 		for (String hash : removed) {
 			if (!hashes.contains(hash)) {
-				File file = resolveAttachmentDraftFile(hash);
-				if (file != null) {
-					file.delete();
-				}
+				deleteAttachmentDraftFiles(hash, directories);
 			}
 		}
 	}

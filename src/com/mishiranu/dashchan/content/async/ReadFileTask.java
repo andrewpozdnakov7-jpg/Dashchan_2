@@ -13,6 +13,7 @@ import chan.http.HttpException;
 import chan.http.HttpHolder;
 import chan.http.HttpResponse;
 import chan.util.DataFile;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.LocalArchiveManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -73,7 +74,7 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 
 	public static ReadFileTask createCachedMediaFile(FileCallback callback, Chan chan,
 			Uri fromUri, File cachedMediaFile) {
-		DataFile toFile = DataFile.obtain(DataFile.Target.CACHE, cachedMediaFile.getName());
+		DataFile toFile = DataFile.obtainCacheFile(cachedMediaFile);
 		return new ReadFileTask(callback, chan, fromUri, toFile, null, true, null, null);
 	}
 
@@ -227,7 +228,10 @@ public class ReadFileTask extends HttpHolderTask<long[], Boolean> {
 						return false;
 					} catch (IOException e) {
 						ErrorItem.Type errorType = getErrorTypeFromExceptionAndHandle(e);
-						errorItem = new ErrorItem(errorType != null ? errorType : ErrorItem.Type.DOWNLOAD);
+						errorItem = errorType == ErrorItem.Type.NO_ACCESS_TO_MEMORY
+								&& toFile.getTarget() == DataFile.Target.CACHE
+								? new ErrorItem(R.string.cache_is_unavailable)
+								: new ErrorItem(errorType != null ? errorType : ErrorItem.Type.DOWNLOAD);
 						return false;
 					}
 				} else {
