@@ -9,8 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -25,7 +27,7 @@ public final class CachedMedia {
 	/** Run on a worker. Only small headers are read; no full-size pixels are allocated here. */
 	public static ArrayList<GalleryItem> scan(BooleanSupplier cancelled) throws IOException, InterruptedException {
 		CacheManager cache = CacheManager.getInstance();
-		return scan(cache.getMediaDirectory(), cancelled,
+		return scan(cache.getMediaDirectories(), cancelled,
 				file -> cache.isCompletedMediaFile(file, file.length(), file.lastModified()));
 	}
 	static ArrayList<GalleryItem> scan(File directory, BooleanSupplier cancelled) throws IOException, InterruptedException {
@@ -34,11 +36,28 @@ public final class CachedMedia {
 	static ArrayList<GalleryItem> scan(File directory, BooleanSupplier cancelled, Predicate<File> completed)
 			throws IOException, InterruptedException {
 		if (directory == null) throw new IOException("Media cache unavailable");
-		if (!directory.exists()) return new ArrayList<>();
-		File[] files = directory.listFiles();
-		if (files == null) throw new IOException("Media cache cannot be listed");
-		Arrays.sort(files, Comparator.comparingLong(File::lastModified).reversed().thenComparing(File::getName));
+		return scan(Collections.singletonList(directory), cancelled, completed);
+	}
+
+	private static ArrayList<GalleryItem> scan(List<File> directories, BooleanSupplier cancelled,
+			Predicate<File> completed) throws IOException, InterruptedException {
+		ArrayList<File> files = new ArrayList<>();
+		boolean inaccessible = false;
+		boolean scanned = false;
+		for (File directory : directories) {
+			if (!directory.exists()) continue;
+			File[] listed = directory.listFiles();
+			if (listed != null) {
+				Collections.addAll(files, listed);
+				scanned = true;
+			} else {
+				inaccessible = true;
+			}
+		}
+		if (inaccessible && !scanned) throw new IOException("Media cache cannot be listed");
+		files.sort(Comparator.comparingLong(File::lastModified).reversed().thenComparing(File::getName));
 		ArrayList<GalleryItem> result = new ArrayList<>();
+		HashSet<String> added = new HashSet<>();
 		byte[] header = new byte[4096];
 		for (File file : files) {
 			if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) throw new InterruptedException();
@@ -57,6 +76,7 @@ public final class CachedMedia {
 			} catch (IOException ignored) { continue; } // Eviction can race this snapshot.
 			String extension = extension(header, length);
 			if (extension == null || !file.isFile() || file.length() != size || file.lastModified() != modified || !completed.test(file)) continue;
+			if (!added.add(file.getName())) continue;
 			boolean video = extension.equals("mp4") || extension.equals("mov") || extension.equals("mkv");
 			Uri uri = Uri.fromFile(file);
 			Uri thumbnail = uri.buildUpon().fragment(THUMBNAIL_REVISION + modified + "-" + size + (video ? "-video" : "-image")).build();

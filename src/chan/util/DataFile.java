@@ -82,6 +82,10 @@ public abstract class DataFile {
 		}
 	}
 
+	public static DataFile obtainCacheFile(File file) {
+		return new RegularFile(Target.CACHE, file.getName(), file.getParentFile());
+	}
+
 	private final Target target;
 	private final String path;
 
@@ -132,15 +136,20 @@ public abstract class DataFile {
 	}
 
 	private static class RegularFile extends DataFile {
+		private final File directory;
 		private final File file;
 
 		private RegularFile(Target target, String path) {
+			this(target, path, null);
+		}
+
+		private RegularFile(Target target, String path, File directory) {
 			super(target, path);
 			if (target.directory == null) {
 				throw new IllegalArgumentException("Target requires SAF");
 			}
-			File directory = target.directory.getDirectory();
-			file = StringUtils.isEmpty(path) ? directory : new File(directory, path);
+			this.directory = directory != null ? directory : target.directory.getDirectory();
+			file = StringUtils.isEmpty(path) ? this.directory : new File(this.directory, path);
 		}
 
 		@Override
@@ -174,9 +183,9 @@ public abstract class DataFile {
 			if (StringUtils.isEmpty(path)) {
 				return this;
 			} else if (relativePath.isEmpty()) {
-				return new RegularFile(getTarget(), validatePath(path));
+				return new RegularFile(getTarget(), validatePath(path), directory);
 			} else {
-				return new RegularFile(getTarget(), validatePath(relativePath + "/" + path));
+				return new RegularFile(getTarget(), validatePath(relativePath + "/" + path), directory);
 			}
 		}
 

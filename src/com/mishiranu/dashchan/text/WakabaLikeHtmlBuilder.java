@@ -341,18 +341,19 @@ public class WakabaLikeHtmlBuilder {
 
 	private void appendFile(FileItem fileItem, boolean multiple) {
 		StringBuilder builder = this.builder;
+		String imageLink = Uri.encode(fileItem.imageFile, "/");
 		if (multiple) {
 			builder.append("<div style=\"float: left;\">\n");
 		}
-		builder.append("<span class=\"filesize\" data-file=\"").append(fileItem.imageFile)
-				.append("\" data-thumbnail=\"").append(fileItem.thumbnailFile != null ? fileItem.thumbnailFile : "");
+		builder.append("<span class=\"filesize\" data-file=\"").append(escapeHtml(fileItem.imageFile))
+				.append("\" data-thumbnail=\"").append(escapeHtml(fileItem.thumbnailFile));
 		if (!StringUtils.isEmpty(fileItem.originalName)) {
 			builder.append("\" data-original-name=\"").append(escapeHtml(fileItem.originalName));
 		}
 		builder.append("\" data-size=\"").append(fileItem.size).append("\" data-width=\"").append(fileItem.width)
 				.append("\" data-height=\"").append(fileItem.height).append("\">\n");
 		builder.append("File: <a target=\"_blank\" href=\"")
-				.append(fileItem.imageFile).append("\">").append(fileItem.displayName).append("</a>\n");
+				.append(imageLink).append("\">").append(escapeHtml(fileItem.displayName)).append("</a>\n");
 		String size = null;
 		if (fileItem.size > 0) {
 			float sizeFloat;
@@ -388,14 +389,14 @@ public class WakabaLikeHtmlBuilder {
 		}
 		builder.append("</span>\n<br />\n");
 		if (fileItem.thumbnailFile != null) {
-			builder.append("<a target=\"_blank\" href=\"").append(fileItem.imageFile).append("\">\n<img src=\"")
-					.append(fileItem.thumbnailFile).append("\" class=\"thumb\"");
+			builder.append("<a target=\"_blank\" href=\"").append(imageLink).append("\">\n<img src=\"")
+					.append(Uri.encode(fileItem.thumbnailFile, "/")).append("\" class=\"thumb\"");
 			if (!multiple) {
 				builder.append(" style=\"float: left;\"");
 			}
 			builder.append(" />\n</a>\n");
 		} else {
-			builder.append("<div class=\"nothumb\">\n<a target=\"_blank\" href=\"").append(fileItem.imageFile)
+			builder.append("<div class=\"nothumb\">\n<a target=\"_blank\" href=\"").append(imageLink)
 					.append("\">No<br />thumbnail</a>\n</div>\n");
 		}
 		if (multiple) {

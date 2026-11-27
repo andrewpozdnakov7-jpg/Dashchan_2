@@ -46,7 +46,7 @@ final class VideoDownloadSession implements ReadVideoTask.Callback, VideoPlayer.
 
 	void start(Listener listener) {
 		this.listener = listener;
-		downloadTask = new ReadVideoTask(this, Chan.getPreferred(chanName, uri), uri, 0);
+		downloadTask = new ReadVideoTask(this, Chan.getPreferred(chanName, uri), uri, sourceFile, 0);
 		downloadTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 	}
 
@@ -168,7 +168,7 @@ final class VideoDownloadSession implements ReadVideoTask.Callback, VideoPlayer.
 			rangeTask = null;
 		}
 		if (!cancelled && error == null && !complete && allowRangeRequests && start > 0) {
-			rangeTask = new ReadVideoTask(this, Chan.getPreferred(chanName, uri), uri, start);
+			rangeTask = new ReadVideoTask(this, Chan.getPreferred(chanName, uri), uri, sourceFile, start);
 			rangeTask.execute(ConcurrentUtils.PARALLEL_EXECUTOR);
 		}
 	}

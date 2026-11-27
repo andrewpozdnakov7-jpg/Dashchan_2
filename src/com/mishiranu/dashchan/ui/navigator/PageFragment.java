@@ -140,6 +140,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	private ViewFactory.ErrorHolder errorHolder;
 	private Button localNetworkSettingsButton;
 	private LinearLayout browserChallengeActions;
+	private View arhivachBrowserButton;
+	private Button arhivachVerificationButton;
 	private boolean browserChallenge;
 	private PaddedRecyclerView recyclerView;
 	private ThreadQuickNavigation quickNavigation;
@@ -310,6 +312,11 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 				addBrowserChallengeButton(R.string.retry, this::retrySoyjakPage);
 			} else {
 				addBrowserChallengeButton(R.string.arhivach_open_browser, this::openArhivachInBrowser);
+				arhivachBrowserButton = browserChallengeActions.getChildAt(browserChallengeActions.getChildCount() - 1);
+				arhivachVerificationButton = addBrowserChallengeButton(R.string.soyjak_open_page, () -> {
+					if (initErrorItem != null) openArhivachInBrowser(initErrorItem.specialType);
+				});
+				arhivachVerificationButton.setVisibility(View.GONE);
 				addBrowserChallengeButton(R.string.retry, this::retryArhivachPage);
 			}
 		}
@@ -378,6 +385,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		progressView = null;
 		errorHolder = null;
 		localNetworkSettingsButton = null;
+		arhivachBrowserButton = null;
+		arhivachVerificationButton = null;
 		recyclerView = null;
 		quickNavigation = null;
 		threadFabMenu = null;
@@ -797,7 +806,9 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		initErrorItem = errorItem;
 		progressView.setVisibility(View.GONE);
 		errorHolder.layout.setVisibility(View.VISIBLE);
-		errorHolder.text.setText(errorItem.toString());
+		boolean arhivachVerification = isArhivachFirewallError(errorItem);
+		errorHolder.text.setText(arhivachVerification
+				? getString(R.string.soyjak_browser_challenge) : errorItem.toString());
 		boolean localNetworkError = errorItem.type == ErrorItem.Type.LOCAL_NETWORK_PERMISSION
 				&& getPage().chanName != null;
 		if (localNetworkError && localNetworkSettingsButton == null) {
@@ -819,11 +830,21 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (browserChallengeActions != null) {
 			browserChallengeActions.setVisibility(browserChallenge ? View.VISIBLE : View.GONE);
 		}
+		if (arhivachVerificationButton != null) {
+			arhivachBrowserButton.setVisibility(arhivachVerification ? View.GONE : View.VISIBLE);
+			arhivachVerificationButton.setVisibility(arhivachVerification ? View.VISIBLE : View.GONE);
+		}
 		if (motion != null) motion.commit();
 	}
 
 	@Override
 	public boolean showBrowserChallenge(ErrorItem errorItem) {
+		if (isArhivachFirewallError(errorItem)) {
+			ClickableToast.show(getString(R.string.soyjak_browser_challenge), null,
+					new ClickableToast.Button(R.string.soyjak_open_page, true,
+							() -> openArhivachInBrowser(errorItem.specialType)));
+			return true;
+		}
 		if (!isSoyjakPage() || errorItem.type != ErrorItem.Type.BROWSER_CHALLENGE) return false;
 		SoyjakDiagnostics.event("ui_challenge_shown", null);
 		setBrowserChallenge(true);
@@ -852,18 +873,26 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 	}
 
 	private void openArhivachInBrowser() {
+		openArhivachInBrowser(0);
+	}
+
+	private void openArhivachInBrowser(int pageNumber) {
 		if (!isResumed() || !isArhivachPage()) return;
 		Page page = getPage();
 		ChanLocator locator = Chan.get(page.chanName).locator;
 		Uri uri = page.content == Page.Content.POSTS
 				? locator.safe(false).createThreadUri(page.boardName, page.threadNumber)
-				: locator.safe(false).createBoardUri(page.boardName, 0);
+				: locator.safe(false).createBoardUri(page.boardName, pageNumber);
 		if (uri != null) {
 			ArhivachBrowserSession.log("ui_open_browser path=" + uri.getPath());
 			((FragmentHandler) requireActivity()).pushFragment(new BrowserFragment(uri));
 		} else {
 			ClickableToast.show(R.string.unknown_address);
 		}
+	}
+
+	private boolean isArhivachFirewallError(ErrorItem errorItem) {
+		return errorItem.type == ErrorItem.Type.FIREWALL_BLOCK && isArhivachPage();
 	}
 
 	private void setBrowserChallenge(boolean value) {
@@ -873,11 +902,12 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		}
 	}
 
-	private void addBrowserChallengeButton(int title, Runnable action) {
+	private Button addBrowserChallengeButton(int title, Runnable action) {
 		Button button = new Button(browserChallengeActions.getContext(), null, android.R.attr.borderlessButtonStyle);
 		button.setText(title);
 		button.setOnClickListener(v -> action.run());
 		browserChallengeActions.addView(button, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		return button;
 	}
 
 	private void retrySoyjakPage() {

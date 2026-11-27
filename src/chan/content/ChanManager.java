@@ -97,6 +97,8 @@ public class ChanManager {
 	private static final String BUILTIN_D3_NAME = "d3ru";
 	private static final String BUILTIN_E444_NAME = "e444";
 	private static final String BUILTIN_SOYJAK_NAME = "soyjak";
+	private static final String BUILTIN_AOBA_NAME = "aoba";
+	private static final String BUILTIN_ONECHAN_NAME = "onechan";
 	private static final String[] BUILTIN_REPLACED_PACKAGE_NAMES = {
 			"com.mishiranu.dashchan.chan.dvach", "io.dashchan2.chan.dvach",
 			"com.mishiranu.dashchan.chan.fourchan", "io.dashchan2.chan.fourchan",
@@ -500,6 +502,34 @@ public class ChanManager {
 		return new Extension(item.changeLoadError(result.error), result.chan);
 	}
 
+	private static Extension loadBuiltinAoba(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem item = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_AOBA_NAME, "Aoba Channel",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_public, null, null,
+				"com.mishiranu.dashchan.chan.aoba.AobaChanConfiguration",
+				"com.mishiranu.dashchan.chan.aoba.AobaChanPerformer",
+				"com.mishiranu.dashchan.chan.aoba.AobaChanLocator",
+				"com.mishiranu.dashchan.chan.aoba.AobaChanMarkup", true);
+		LoadChanResult result = loadChan(item, application.getPackageManager());
+		return new Extension(item.changeLoadError(result.error), result.chan);
+	}
+
+	private static Extension loadBuiltinOnechan(Fingerprints applicationFingerprints) {
+		MainApplication application = MainApplication.getInstance();
+		ExtensionItem item = new ExtensionItem(ExtensionItem.Type.CHAN, BUILTIN_ONECHAN_NAME, "1chan.ink",
+				ExtensionItem.TrustState.TRUSTED, application.getPackageName(), BuildConfig.VERSION_NAME,
+				BuildConfig.VERSION_CODE, application.getApplicationInfo(), applicationFingerprints,
+				MAX_VERSION, true, R.drawable.ic_public, null, null,
+				"com.mishiranu.dashchan.chan.onechan.OnechanChanConfiguration",
+				"com.mishiranu.dashchan.chan.onechan.OnechanChanPerformer",
+				"com.mishiranu.dashchan.chan.onechan.OnechanChanLocator",
+				"com.mishiranu.dashchan.chan.onechan.OnechanChanMarkup", true);
+		LoadChanResult result = loadChan(item, application.getPackageManager());
+		return new Extension(item.changeLoadError(result.error), result.chan);
+	}
+
 	private ChanManager() {
 		String packageName = MainApplication.getInstance().getPackageName();
 		Chan.Provider fallbackChanProvider = new Chan.Provider(null);
@@ -562,6 +592,12 @@ public class ChanManager {
 			Extension builtInSoyjak = loadBuiltinSoyjak(applicationFingerprints);
 			extensions.add(builtInSoyjak);
 			usedExtensionNames.add(builtInSoyjak.item.name);
+			Extension builtInAoba = loadBuiltinAoba(applicationFingerprints);
+			extensions.add(builtInAoba);
+			usedExtensionNames.add(builtInAoba.item.name);
+			Extension builtInOnechan = loadBuiltinOnechan(applicationFingerprints);
+			extensions.add(builtInOnechan);
+			usedExtensionNames.add(builtInOnechan.item.name);
 			Collections.addAll(loadedPackageNames, BUILTIN_REPLACED_PACKAGE_NAMES);
 			for (String knownPackageName : BuildConfig.KNOWN_CHAN_EXTENSION_PACKAGES) {
 				loadKnownExtension(packageManager, knownPackageName, loadedPackageNames,

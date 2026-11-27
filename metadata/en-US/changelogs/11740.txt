@@ -1,0 +1,2 @@
+- Restored browsing on Arhivach.
+- Added experimental reading support for Aoba Channel and 1chan.ink. Enable either forum in Settings → Forums.

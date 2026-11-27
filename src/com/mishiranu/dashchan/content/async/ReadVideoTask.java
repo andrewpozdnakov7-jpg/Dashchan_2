@@ -6,6 +6,7 @@ import chan.content.ExtensionException;
 import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.HttpHolder;
+import com.mishiranu.dashchan.R;
 import com.mishiranu.dashchan.content.CacheManager;
 import com.mishiranu.dashchan.content.LocalArchiveManager;
 import com.mishiranu.dashchan.content.model.ErrorItem;
@@ -45,21 +46,21 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 		}
 	};
 
-	public ReadVideoTask(Callback callback, Chan chan, Uri uri, long start) {
+	public ReadVideoTask(Callback callback, Chan chan, Uri uri, File file, long start) {
 		super(chan);
 		this.callback = callback;
 		this.chan = chan;
 		this.uri = uri;
 		this.start = start;
 		localArchiveResource = LocalArchiveManager.RESOURCE_SCHEME.equals(uri.getScheme());
-		file = CacheManager.getInstance().getMediaFile(uri, false);
-		partialFile = CacheManager.getInstance().getPartialMediaFile(uri);
+		this.file = file;
+		partialFile = file != null ? new File(file.getParentFile(), file.getName() + ".part") : null;
 	}
 
 	@Override
 	protected Boolean run(HttpHolder holder) {
 		if (file == null || partialFile == null) {
-			errorItem = new ErrorItem(ErrorItem.Type.NO_ACCESS_TO_MEMORY);
+			errorItem = new ErrorItem(R.string.cache_is_unavailable);
 			return false;
 		}
 		boolean success = false;
@@ -136,7 +137,8 @@ public class ReadVideoTask extends HttpHolderTask<long[], Boolean> {
 			return false;
 		} catch (IOException e) {
 			ErrorItem.Type errorType = ReadFileTask.getErrorTypeFromExceptionAndHandle(e);
-			errorItem = new ErrorItem(errorType != null ? errorType : ErrorItem.Type.DOWNLOAD);
+			errorItem = errorType == ErrorItem.Type.NO_ACCESS_TO_MEMORY ? new ErrorItem(R.string.cache_is_unavailable)
+					: new ErrorItem(errorType != null ? errorType : ErrorItem.Type.DOWNLOAD);
 			return false;
 		} catch (ExtensionException | HttpException | InvalidResponseException e) {
 			errorItem = e.getErrorItemAndHandle();

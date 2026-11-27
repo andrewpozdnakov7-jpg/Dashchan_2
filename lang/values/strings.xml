@@ -112,6 +112,7 @@
 	<string name="captcha_pass__summary">Allows to skip captcha</string>
 	<string name="add_from_favorites">Add from favorites</string>
 	<string name="captcha_type">Captcha type</string>
+	<string name="forum_image_captcha">Image CAPTCHA</string>
 	<string name="cards">Cards</string>
 	<string name="catalog">Catalog</string>
 	<string name="change_theme">Change theme</string>

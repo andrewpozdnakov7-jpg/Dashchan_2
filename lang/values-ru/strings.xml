@@ -114,6 +114,7 @@
 	<string name="captcha_pass__summary">Код для пропуска капчи</string>
 	<string name="add_from_favorites">Добавить из избранного</string>
 	<string name="captcha_type">Тип капчи</string>
+	<string name="forum_image_captcha">Капча с картинкой</string>
 	<string name="cards">Карточки</string>
 	<string name="catalog">Каталог</string>
 	<string name="change_theme">Сменить тему</string>

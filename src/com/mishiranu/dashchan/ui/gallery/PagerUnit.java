@@ -904,10 +904,6 @@ public class PagerUnit implements PagerInstance.Callback {
 		holder.loadState = PagerInstance.LoadState.PREVIEW_OR_LOADING;
 		galleryInstance.callback.invalidateOptionsMenu();
 		CacheManager cacheManager = CacheManager.getInstance();
-		if (!cacheManager.isCacheAvailable()) {
-			showError(holder, galleryInstance.context.getString(R.string.cache_is_unavailable));
-			return;
-		}
 		galleryInstance.callback.modifySystemUiVisibility(GalleryInstance.Flags.LOCKED_ERROR, false);
 		holder.errorHolder.layout.setVisibility(View.GONE);
 		if (holder.videoPageFrame != null && videoUnit.findPageFrame(galleryItem) != holder.videoPageFrame) {
@@ -942,7 +938,7 @@ public class PagerUnit implements PagerInstance.Callback {
 			String path = uri.getPath();
 			cachedFile = path != null ? new File(path) : null;
 		} else {
-			cachedFile = cacheManager.getMediaFile(uri, true);
+			cachedFile = reload ? cacheManager.getMediaFileForWrite(uri) : cacheManager.getMediaFile(uri, true);
 		}
 		if (cachedFile == null) {
 			showError(holder, galleryInstance.context.getString(R.string.cache_is_unavailable));
