@@ -1068,6 +1068,9 @@
 	<string name="soyjak_catalog_download">WebView получил каталог как файл для скачивания</string>
 	<string name="soyjak_browser_challenge">Сайт запрашивает проверку в браузере</string>
 	<string name="soyjak_open_page">Открыть страницу</string>
+	<string name="arhivach_open_browser">Открыть в браузере</string>
+	<string name="arhivach_reset_access">Сбросить доступ к сайту</string>
+	<string name="arhivach_access_reset">Доступ к сайту сброшен</string>
 	<string name="soyjak_external_browser">Открыть во внешнем браузере</string>
 	<string name="soyjak_diagnostics_title">Диагностика Soyjak</string>
 	<string name="soyjak_diagnostics_report">Показать отчёт диагностики</string>

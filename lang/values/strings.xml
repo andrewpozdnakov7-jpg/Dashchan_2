@@ -1047,6 +1047,9 @@
 	<string name="soyjak_catalog_download">The WebView received the catalog as a download</string>
 	<string name="soyjak_browser_challenge">This site requires verification in a browser</string>
 	<string name="soyjak_open_page">Open page</string>
+	<string name="arhivach_open_browser">Open in browser</string>
+	<string name="arhivach_reset_access">Reset site access</string>
+	<string name="arhivach_access_reset">Site access reset</string>
 	<string name="soyjak_external_browser">Open in external browser</string>
 	<string name="soyjak_diagnostics_title">Soyjak diagnostics</string>
 	<string name="soyjak_diagnostics_report">Show diagnostics report</string>

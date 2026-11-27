@@ -24,6 +24,7 @@ import chan.content.Chan;
 import chan.content.ChanLocator;
 import chan.content.ChanPerformer;
 import com.mishiranu.dashchan.R;
+import com.mishiranu.dashchan.chan.arhivach.ArhivachBrowserSession;
 import com.mishiranu.dashchan.chan.soyjak.SoyjakDiagnostics;
 import com.mishiranu.dashchan.chan.soyjak.SoyjakReadRecovery;
 import com.mishiranu.dashchan.content.Preferences;
@@ -298,14 +299,19 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		progressView = ViewFactory.createProgressLayout(layout, standardService);
 		// The same bounded service-page registry owns loading, error and page appearance.
 		errorHolder = ViewFactory.createErrorLayout(layout, standardService);
-		if (isSoyjakPage()) {
+		if (isSoyjakPage() || isArhivachPage()) {
 			browserChallengeActions = new LinearLayout(layout.getContext());
 			browserChallengeActions.setOrientation(LinearLayout.VERTICAL);
 			browserChallengeActions.setVisibility(View.GONE);
 			((ViewGroup) errorHolder.text.getParent()).addView(browserChallengeActions,
 					ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-			addBrowserChallengeButton(R.string.soyjak_open_page, this::openSoyjakPage);
-			addBrowserChallengeButton(R.string.retry, this::retrySoyjakPage);
+			if (isSoyjakPage()) {
+				addBrowserChallengeButton(R.string.soyjak_open_page, this::openSoyjakPage);
+				addBrowserChallengeButton(R.string.retry, this::retrySoyjakPage);
+			} else {
+				addBrowserChallengeButton(R.string.arhivach_open_browser, this::openArhivachInBrowser);
+				addBrowserChallengeButton(R.string.retry, this::retryArhivachPage);
+			}
 		}
 		if (standardService) com.mishiranu.dashchan.widget.InterfaceAppearance.standardPage(layout);
 		errorHolder.layout.setVisibility(View.GONE);
@@ -594,6 +600,9 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 			menu.add(0, R.id.menu_soyjak_retry, 0, R.string.retry).setVisible(browserChallenge);
 			menu.add(0, R.id.menu_soyjak_diagnostics, 0, R.string.soyjak_diagnostics_title)
 					.setVisible(browserChallenge);
+		} else if (isArhivachPage()) {
+			menu.add(0, R.id.menu_arhivach_open_browser, 0, R.string.arhivach_open_browser);
+			menu.add(0, R.id.menu_arhivach_reset_access, 0, R.string.arhivach_reset_access);
 		}
 		if (primary) {
 			searchBackRevision++;
@@ -649,6 +658,15 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 
 	@Override
 	public boolean onMenuItemSelected(@NonNull MenuItem item) {
+		if (item.getItemId() == R.id.menu_arhivach_open_browser && isArhivachPage()) {
+			openArhivachInBrowser();
+			return true;
+		}
+		if (item.getItemId() == R.id.menu_arhivach_reset_access && isArhivachPage()) {
+			ArhivachBrowserSession.resetAccess();
+			ClickableToast.show(R.string.arhivach_access_reset);
+			return true;
+		}
 		if (isSoyjakPage() && browserChallenge) {
 			if (item.getItemId() == R.id.menu_soyjak_open_page) {
 				openSoyjakPage();
@@ -796,7 +814,8 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		if (localNetworkSettingsButton != null) {
 			localNetworkSettingsButton.setVisibility(localNetworkError ? View.VISIBLE : View.GONE);
 		}
-		setBrowserChallenge(errorItem.type == ErrorItem.Type.BROWSER_CHALLENGE);
+		setBrowserChallenge(errorItem.type == ErrorItem.Type.BROWSER_CHALLENGE
+				|| (isArhivachPage() && errorItem.type == ErrorItem.Type.FIREWALL_BLOCK));
 		if (browserChallengeActions != null) {
 			browserChallengeActions.setVisibility(browserChallenge ? View.VISIBLE : View.GONE);
 		}
@@ -820,6 +839,31 @@ public final class PageFragment extends ContentFragment implements FragmentHandl
 		Page page = getPage();
 		return "soyjak".equals(page.chanName) && (page.content == Page.Content.BOARDS
 				|| page.content == Page.Content.THREADS || page.content == Page.Content.POSTS);
+	}
+
+	private boolean isArhivachPage() {
+		Page page = getPage();
+		return "arhivach".equals(page.chanName)
+				&& (page.content == Page.Content.THREADS || page.content == Page.Content.POSTS);
+	}
+
+	private void retryArhivachPage() {
+		if (isResumed() && listPage != null && listPage.isRunning()) listPage.retryBrowserChallenge();
+	}
+
+	private void openArhivachInBrowser() {
+		if (!isResumed() || !isArhivachPage()) return;
+		Page page = getPage();
+		ChanLocator locator = Chan.get(page.chanName).locator;
+		Uri uri = page.content == Page.Content.POSTS
+				? locator.safe(false).createThreadUri(page.boardName, page.threadNumber)
+				: locator.safe(false).createBoardUri(page.boardName, 0);
+		if (uri != null) {
+			ArhivachBrowserSession.log("ui_open_browser path=" + uri.getPath());
+			((FragmentHandler) requireActivity()).pushFragment(new BrowserFragment(uri));
+		} else {
+			ClickableToast.show(R.string.unknown_address);
+		}
 	}
 
 	private void setBrowserChallenge(boolean value) {
